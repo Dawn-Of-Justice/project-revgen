@@ -2,4 +2,5 @@ python-dotenv
 groq
 flask
 google-cloud-translate
+google-cloud-speech
 print_color
