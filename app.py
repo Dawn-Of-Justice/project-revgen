@@ -11,7 +11,7 @@ import io
 import wave
 from datetime import datetime
 
-# Setup Google Cloud credentials from environment variable
+# Setup Google Cloud credentials
 if 'GOOGLE_CREDENTIALS' in os.environ:
     try:
         credentials_info = json.loads(os.environ['GOOGLE_CREDENTIALS'])
@@ -24,58 +24,31 @@ if 'GOOGLE_CREDENTIALS' in os.environ:
         print(f"Error setting up credentials: {str(e)}")
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'secret!'
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
-socketio = SocketIO(app, cors_allowed_origins="*")
 
-@app.before_request
-def before_request():
-    # Redirect HTTP to HTTPS
-    if not request.is_secure:
-        url = request.url.replace('http://', 'https://', 1)
-        return redirect(url, code=301)
+# Initialize SocketIO with WebSocket transport
+socketio = SocketIO(app, 
+                   cors_allowed_origins="*", 
+                   async_mode='gevent',
+                   transport='websocket')
 
-# Configuration
-ALLOWED_AUDIO_EXTENSIONS = {'wav', 'mp3', 'm4a'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_AUDIO_EXTENSIONS
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    return jsonify({
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "voice-command-processor"
-    })
-
-# WebSocket event handlers
-@socketio.on('connect')
-def handle_connect():
-    print('Client connected')
-    emit('status', {'message': 'Connected to server'})
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    print('Client disconnected')
-
-# This will handle the binary audio data
-@socketio.on('message')
-def handle_binary_audio(data):
+def process_audio_data(audio_data):
     try:
-        # Convert binary audio data to WAV format
-        audio_data = io.BytesIO()
-        with wave.open(audio_data, 'wb') as wav_file:
-            wav_file.setnchannels(1)  # Mono
-            wav_file.setsampwidth(2)  # 16-bit
-            wav_file.setframerate(16000)  # 16kHz
-            wav_file.writeframes(data)
+        # Create WAV from raw audio data
+        wav_data = io.BytesIO()
+        with wave.open(wav_data, 'wb') as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(16000)
+            wav_file.writeframes(audio_data)
 
         # Initialize Google Cloud clients
         speech_client = speech_v1.SpeechClient()
         translate_client = translate_v2.Client()
 
         # Configure speech recognition
-        audio = speech_v1.RecognitionAudio(content=audio_data.getvalue())
+        audio = speech_v1.RecognitionAudio(content=wav_data.getvalue())
         config = speech_v1.RecognitionConfig(
             language_code="ml-IN",
             sample_rate_hertz=16000,
@@ -86,69 +59,11 @@ def handle_binary_audio(data):
         # Perform speech recognition
         response = speech_client.recognize(config=config, audio=audio)
         
-        if response.results:
-            # Get Malayalam text
-            malayalam_text = response.results[0].alternatives[0].transcript
-
-            # Translate to English
-            translation = translate_client.translate(
-                malayalam_text,
-                target_language='en'
-            )
-
-            translated_text = translation['translatedText'].lower()
-            print(f"Translated text: {translated_text}")
-            
-            # Send results back to client
-            emit('transcription', {
-                'original_text': malayalam_text,
-                'translated_text': translated_text,
-            })
-        else:
-            emit('error', {'message': 'No speech detected'})
-
-    except Exception as e:
-        print(f"Error processing audio: {str(e)}")
-        emit('error', {'message': str(e), 'type': type(e).__name__})
-
-@app.route('/process', methods=['POST'])
-def process_audio():
-    print("Processing audio file...")
-    try:
-        # Check if audio file is present
-        if 'audio' not in request.files:
-            return jsonify({"error": "No audio file provided"}), 400
-        
-        audio_file = request.files['audio']
-        if not allowed_file(audio_file.filename):
-            return jsonify({"error": "Invalid file format"}), 400
-                      
-        # Initialize Google Cloud clients
-        speech_client = speech_v1.SpeechClient()
-        translate_client = translate_v2.Client()
-
-        # Read audio content directly from the request stream
-        audio_content = audio_file.read()
-
-        # Configure speech recognition
-        audio = speech_v1.RecognitionAudio(content=audio_content)
-        config = speech_v1.RecognitionConfig(
-            language_code="ml-IN",
-            sample_rate_hertz=16000,  # Match ESP32 sample rate
-            audio_channel_count=1,     # Mono
-            enable_automatic_punctuation=True
-        )
-
-        # Perform speech recognition
-        response = speech_client.recognize(config=config, audio=audio)
-        
         if not response.results:
-            return jsonify({"error": "No speech detected"}), 400
+            return {"error": "No speech detected"}
 
-        # Get Malayalam text
+        # Get Malayalam text and translate
         malayalam_text = response.results[0].alternatives[0].transcript
-
-        # Translate to English
         translation = translate_client.translate(
             malayalam_text,
             target_language='en'
@@ -156,14 +71,47 @@ def process_audio():
 
         translated_text = translation['translatedText'].lower()
         print(f"Translated text: {translated_text}")
-        return jsonify({
+        
+        return {
             "original_text": malayalam_text,
             "translated_text": translated_text,
-        })
-
+        }
     except Exception as e:
-        print(f"Error processing request: {str(e)}")  # Server-side logging
-        return jsonify({
-            "error": str(e),
-            "type": type(e).__name__
-        }), 500
+        print(f"Error processing audio: {str(e)}")
+        return {"error": str(e)}
+
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+    emit('status', {'message': 'Connected to server'})
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected')
+
+@socketio.on('audio')
+def handle_audio(data):
+    print("Received audio data")
+    result = process_audio_data(data)
+    emit('result', result)
+
+# Keep existing HTTP endpoints
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "voice-command-processor"
+    })
+
+@app.route('/process', methods=['POST'])
+def process_audio():
+    if 'audio' not in request.files:
+        return jsonify({"error": "No audio file provided"}), 400
+    
+    audio_file = request.files['audio']
+    result = process_audio_data(audio_file.read())
+    return jsonify(result)
+
+if __name__ == '__main__':
+    socketio.run(app, debug=True)
