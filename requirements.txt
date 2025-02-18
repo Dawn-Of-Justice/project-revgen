@@ -1,4 +1,5 @@
 python-dotenv
 groq
 flask
+google-cloud-translate
 print_color

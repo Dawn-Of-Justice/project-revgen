@@ -30,7 +30,7 @@ def process_audio():
        audio_file = request.files['audio']
        if not allowed_file(audio_file.filename):
            return jsonify({"error": "Invalid file format"}), 400
-              
+                     
        # Initialize Google Cloud clients
        speech_client = speech_v1.SpeechClient()
        translate_client = translate_v2.Client()
@@ -64,10 +64,11 @@ def process_audio():
 
        translated_text = translation['translatedText'].lower()
        #command = next((cmd for key, cmd in commands.items() if key in translated_text), "UNKNOWN_COMMAND")
-
+       print(translated_text)
+       
        return jsonify({
            "original_text": malayalam_text,
-           "translated_text": translation['translatedText'],
+           "translated_text": translated_text,
            #"command": command
        })
 
@@ -78,5 +79,6 @@ def process_audio():
        }), 500
 
 if __name__ == "__main__":
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"./project-revgen-3929193e6ca4.json"
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
