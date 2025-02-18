@@ -1,5 +1,7 @@
 python-dotenv
 groq
+gevent
+gevent-websocket
 flask
 google-cloud-translate
 google-cloud-speech
