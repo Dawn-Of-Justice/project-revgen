@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
+from werkzeug.middleware.proxy_fix import ProxyFix
 from google.cloud import speech_v1, translate_v2
 import os
 import json
@@ -17,6 +18,14 @@ if 'GOOGLE_CREDENTIALS' in os.environ:
         print(f"Error setting up credentials: {str(e)}")
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
+
+@app.before_request
+def before_request():
+    # Redirect HTTP to HTTPS
+    if not request.is_secure:
+        url = request.url.replace('http://', 'https://', 1)
+        return redirect(url, code=301)
 
 # Configuration
 ALLOWED_AUDIO_EXTENSIONS = {'wav', 'mp3', 'm4a'}
@@ -34,6 +43,7 @@ def health_check():
 
 @app.route('/process', methods=['POST'])
 def process_audio():
+    print("Processing audio file...")
     try:
         # Check if audio file is present
         if 'audio' not in request.files:
