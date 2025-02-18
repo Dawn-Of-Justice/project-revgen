@@ -77,8 +77,3 @@ def process_audio():
            "error": str(e),
            "type": type(e).__name__
        }), 500
-
-if __name__ == "__main__":
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"./project-revgen-3929193e6ca4.json"
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)

@@ -3,4 +3,5 @@ groq
 flask
 google-cloud-translate
 google-cloud-speech
+gunicorn
 print_color
