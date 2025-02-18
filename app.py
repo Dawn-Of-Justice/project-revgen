@@ -4,6 +4,18 @@ import os
 import json
 from datetime import datetime
 
+# Setup Google Cloud credentials from environment variable
+if 'GOOGLE_CREDENTIALS' in os.environ:
+    try:
+        credentials_info = json.loads(os.environ['GOOGLE_CREDENTIALS'])
+        credentials_path = '/tmp/google-credentials.json'
+        with open(credentials_path, 'w') as f:
+            json.dump(credentials_info, f)
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
+        print(f"Credentials file created at {credentials_path}")
+    except Exception as e:
+        print(f"Error setting up credentials: {str(e)}")
+
 app = Flask(__name__)
 
 # Configuration
