@@ -98,6 +98,9 @@ The Voice Input Device uses a 5000mAh battery optimized for low power consumptio
 - Home automation integration
 - Custom wake word instead of button press
 
+## References
+- [Esp32 Pinout](https://www.electronicshub.org/esp32-pinout/)
+
 ## License
 
 This project is released under the MIT License.
