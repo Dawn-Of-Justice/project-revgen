@@ -5,7 +5,67 @@
 #include "driver/rtc_io.h"
 
 #define I2S_SD 32
-#define I2S_WS 25
+#define I2S_WS 25#include <IRremote.h>
+
+#define IR_RECEIVE_PIN 13  // ESP32 pin connected to OUT pin of TSOP1838
+
+void setup() {
+  // Start serial communication
+  Serial.begin(115200);
+  delay(1000);  // Give serial time to initialize
+  
+  Serial.println("IR Protocol Detector");
+  Serial.println("Point a remote at the IR receiver and press any button");
+  
+  // Initialize the IR receiver
+  IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
+  
+  // Print library version information
+  Serial.print("Using IRremote library version: ");
+  Serial.println(VERSION_IRREMOTE);
+}
+
+void loop() {
+  // Check if an IR signal is received
+  if (IrReceiver.decode()) {
+    // Print a divider for readability
+    Serial.println("\n----------------------------------------");
+    Serial.println("IR Signal Detected!");
+    
+    // Print protocol information
+    Serial.print("Protocol: ");
+    Serial.println(IrReceiver.getProtocolString());
+    
+    // Print raw data
+    Serial.print("Raw Data (HEX): 0x");
+    Serial.println(IrReceiver.decodedIRData.decodedRawData, HEX);
+    
+    // Print address and command
+    Serial.print("Address: 0x");
+    Serial.println(IrReceiver.decodedIRData.address, HEX);
+    
+    Serial.print("Command: 0x");
+    Serial.println(IrReceiver.decodedIRData.command, HEX);
+    
+    // Print additional details
+    Serial.print("Number of bits: ");
+    Serial.println(IrReceiver.decodedIRData.numberOfBits);
+    
+    // Check if it's a repeat code
+    if (IrReceiver.decodedIRData.flags & IRDATA_FLAGS_IS_REPEAT) {
+      Serial.println("Repeat code detected");
+    }
+    
+    // Print the full decoding information for advanced debugging
+    IrReceiver.printIRResultRawFormatted(&Serial);
+    
+    // Ready to receive the next value
+    IrReceiver.resume();
+    
+    // Add a small delay to avoid flooding the serial monitor
+    delay(200);
+  }
+}
 #define I2S_SCK 33
 #define I2S_PORT I2S_NUM_0
 
@@ -19,8 +79,8 @@
 #define bufferLen 1024
 int16_t sBuffer[bufferLen];
 
-const char* ssid = "This Is Note Free Either!";
-const char* password = "godISlove";
+const char* ssid = "SSID_HERE";
+const char* password = "PASSWORD_HERE";
 
 const char* websocket_server_host = "192.168.0.196";
 const uint16_t websocket_server_port = 8888;
