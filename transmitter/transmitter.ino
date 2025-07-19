@@ -1,102 +1,161 @@
 #include <IRremote.h>
 
-#define IR_RECEIVE_PIN 22
-#define IR_SEND_PIN 4
-#define BUTTON_PIN 26
-#define ENABLE_LED_FEEDBACK  true
-#define USE_DEFAULT_FEEDBACK_LED_PIN true
-#define SENDING_REPEATS 0
+// Define the IR transmitter pin
+#define IR_SEND_PIN 5
 
-const int user_input_size = 100;
-char user_input[user_input_size];
-int char_changing = 0;
+// Button structure
+struct Button {
+  String name;
+  uint16_t address;
+  uint16_t command;
+  uint32_t rawData;
+};
 
-/*Sets up the program*/
+// TV Remote buttons (Panasonic) - using protocol method
+Button tvButtons[] = {
+  {"power", 0x8, 0x3D, 0},
+  {"vol+", 0x8, 0x20, 0},
+  {"vol-", 0x8, 0x21, 0},
+  {"up", 0x8, 0x4A, 0},
+  {"down", 0x8, 0x4B, 0},
+  {"left", 0x8, 0x4E, 0},
+  {"right", 0x8, 0x4F, 0},
+  {"ok", 0x8, 0x49, 0},
+  {"exit", 0x8, 0xD3, 0},
+  {"apps", 0x98, 0x8F, 0}
+};
+
+// Set Top Box buttons (NEC) - using raw data method
+Button stbButtons[] = {
+  {"power", 0xDF, 0x59, 0xA65900DF},
+  {"mute", 0xDF, 0x95, 0x6A9500DF},
+  {"vol+", 0xDF, 0x80, 0x7F8000DF},
+  {"vol-", 0xDF, 0x81, 0x7E8100DF},
+  {"ch+", 0xDF, 0x85, 0x7A8500DF},
+  {"ch-", 0xDF, 0x86, 0x798600DF},
+  {"1", 0xDF, 0x86, 0x798600DF},
+  {"2", 0xDF, 0x93, 0x6C9300DF},
+  {"3", 0xDF, 0xCC, 0x33CC00DF},
+  {"4", 0xDF, 0x8E, 0x718E00DF},
+  {"5", 0xDF, 0x8F, 0x708F00DF},
+  {"6", 0xDF, 0xC8, 0x37C800DF},
+  {"7", 0xDF, 0x8A, 0x758A00DF},
+  {"8", 0xDF, 0x8B, 0x748B00DF},
+  {"9", 0xDF, 0xC4, 0x3BC400DF},
+  {"0", 0xDF, 0x87, 0x788700DF}
+};
+
+const int tvButtonCount = sizeof(tvButtons) / sizeof(tvButtons[0]);
+const int stbButtonCount = sizeof(stbButtons) / sizeof(stbButtons[0]);
+
 void setup() {
-  Serial.begin(115200);
-  SerialBT.begin("ESP32 Remote");
+  Serial.begin(9600);
   
-  IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK, USE_DEFAULT_FEEDBACK_LED_PIN);
-  IrSender.begin(IR_SEND_PIN, ENABLE_LED_FEEDBACK); // Specify send pin and enable feedback LED at default feedback LED pin
+  // Turn off onboard LED
+  pinMode(2, OUTPUT);
+  digitalWrite(2, LOW);
   
-  Serial.println("The device started, now you can pair it with bluetooth!");
-  Serial.print("Ready to send IR signals at pin ");
-  Serial.println(IR_SEND_PIN);
-
-  //used internal pullup resistors to prevent noise
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  // Initialize IR transmitter and ensure LED is OFF
+  pinMode(IR_SEND_PIN, OUTPUT);
+  digitalWrite(IR_SEND_PIN, LOW);
+  IrSender.begin(IR_SEND_PIN);
+  digitalWrite(IR_SEND_PIN, LOW);
+  
+  Serial.println("========== IR REMOTE CONTROLLER ==========");
+  Serial.println("📺 TV Commands: tv.power, tv.vol+, tv.vol-, tv.up, tv.down, tv.left, tv.right, tv.ok, tv.exit, tv.apps");
+  Serial.println("📡 STB Commands: stb.power, stb.mute, stb.vol+, stb.vol-, stb.ch+, stb.ch-, stb.0-9");
+  Serial.println("");
+  Serial.println("💡 Examples:");
+  Serial.println("  tv.power");
+  Serial.println("  stb.power, stb.1, stb.2, stb.3");
+  Serial.println("  tv.power, delay 2000, stb.power");
+  Serial.println("==========================================");
 }
 
-/*sends an IR code*/
-void send_message(const char message[]){
-  //unsigned longs are 32 bits so max number is 4294967295 = FFFFFFFF
-  unsigned long code = strtoul(message, NULL, 16);
-  Serial.print("Sending code:");
-  Serial.println(message);
-
-  //the receiver has to be disabled to send messages
-  IrReceiver.stop();
-   
-  IrSender.sendNECRaw(code, SENDING_REPEATS);
-
-  //restarts the reciever
-  IrReceiver.start();
-}
-
-/*checks for serial messages*/
-void check_serial(){
-  if(Serial.available()){
-    delay(100);
-    //clears the previous user input
-    for(int i = 0;i<user_input_size;i++){
-      user_input[i] = 0;
-    }
-    char_changing = 0;
-    while(Serial.available()){
-      char character = Serial.read();
-      if(character != '\n'){
-        if(char_changing < (user_input_size-1)){//-1 due to null teminating character. Usable size of an array is 1 less than its stated length
-          //saves all recieved characters into buffer
-          user_input[char_changing] = character;
-          char_changing++;
-        }else{
-          //input larger than buffer
-          Serial.println("User input too long to store");
-        }
-      }else{
-        //reached the end of the line so sends the recieved message
-        send_message(user_input);
-      }
-    }
-  }
-}
-
-/*checks for IR codes picked up by the reciever*/
-void check_recieved(){
-  if(IrReceiver.decode()){
-    if(IrReceiver.decodedIRData.decodedRawData != 0){
-      IrReceiver.printIRResultShort(&Serial);
-      if(IrReceiver.decodedIRData.decodedRawData == 0xFFFFFFFF){
-        //Repeat command(used by some IR remotes
-        //to indicate that a button has been held
-        Serial.println("...");
-      }else{
-        //transmits the recieved IR code back to the Android device for storage
-        Serial.print("command:");
-        Serial.println(IrReceiver.decodedIRData.decodedRawData, HEX);
-      }
-    }
-    //Enable receiving of the next value
-    IrReceiver.resume(); 
-  }
-}
-
-/*the main loop*/
 void loop() {
-  check_serial();
-  //checks if the recieve button has been held
-  if(digitalRead(BUTTON_PIN) == LOW){
-    //and if so it checks if any IR codes have been picked up
-    check_recieved();
+  if (Serial.available()) {
+    String input = Serial.readString();
+    input.trim();
+    input.toLowerCase();
+    
+    processCommands(input);
   }
+  
+  delay(50);
+}
+
+void processCommands(String commandString) {
+  Serial.println("🚀 EXECUTING: " + commandString);
+  
+  // Split commands by comma
+  int startIndex = 0;
+  
+  while (startIndex < commandString.length()) {
+    int commaIndex = commandString.indexOf(',', startIndex);
+    if (commaIndex == -1) commaIndex = commandString.length();
+    
+    String command = commandString.substring(startIndex, commaIndex);
+    command.trim();
+    
+    if (command.length() > 0) {
+      executeCommand(command);
+      delay(200); // Small delay between commands
+    }
+    
+    startIndex = commaIndex + 1;
+  }
+  
+  Serial.println("✅ Complete!\n");
+}
+
+void executeCommand(String command) {
+  // Handle special commands
+  if (command.startsWith("delay ")) {
+    int delayTime = command.substring(6).toInt();
+    Serial.print("⏳ Wait ");
+    Serial.print(delayTime);
+    Serial.println("ms");
+    delay(delayTime);
+    return;
+  }
+  
+  // Handle remote commands
+  if (command.startsWith("tv.")) {
+    String buttonName = command.substring(3);
+    sendTVCommand(buttonName);
+  } else if (command.startsWith("stb.")) {
+    String buttonName = command.substring(4);
+    sendSTBCommand(buttonName);
+  } else {
+    Serial.println("❌ Unknown: " + command);
+  }
+}
+
+void sendTVCommand(String buttonName) {
+  for (int i = 0; i < tvButtonCount; i++) {
+    if (tvButtons[i].name == buttonName) {
+      Serial.print("📺 TV " + buttonName + " → ");
+      
+      IrSender.sendPanasonic(tvButtons[i].address, (uint8_t)tvButtons[i].command, 0);
+      
+      Serial.println("✅");
+      return;
+    }
+  }
+  Serial.println("❌ TV button not found: " + buttonName);
+}
+
+void sendSTBCommand(String buttonName) {
+  for (int i = 0; i < stbButtonCount; i++) {
+    if (stbButtons[i].name == buttonName) {
+      Serial.print("📡 STB " + buttonName + " → ");
+      
+      // Use NEC Raw method (Method 3 that works)
+      IrSender.sendNECRaw(stbButtons[i].rawData, 0);
+      
+      Serial.println("✅");
+      return;
+    }
+  }
+  Serial.println("❌ STB button not found: " + buttonName);
 }

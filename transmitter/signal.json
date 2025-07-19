@@ -1,0 +1,43 @@
+{
+  "remotes": [
+    {
+      "name": "TV Remote",
+      "brand": "Panasonic",
+      "buttons": [
+        {"name": "Power", "protocol": "Panasonic", "address": "0x8", "command":"0x3D", "raw":"0xBD3D00802002", "bits": 100},
+        {"name": "Volume Up", "protocol": "Panasonic", "address": "0x8", "command":"0x20", "raw":"0xA02000802002", "bits": 100},
+        {"name": "Volume Down", "protocol": "Panasonic", "address": "0x8", "command":"0x21", "raw":"0xA12100802002", "bits": 100},
+        {"name": "Volume Down", "protocol": "Panasonic", "address": "0x8", "command":"0x21", "raw":"0xA12100802002", "bits": 100},
+        {"name": "Up", "protocol": "Panasonic", "address": "0x8", "command":"0x4A", "raw":"0xCA4A00802002", "bits": 100},
+        {"name": "Down", "protocol": "Panasonic", "address": "0x8", "command":"0x4B", "raw":"0xCB4B00802002", "bits": 100},
+        {"name": "Left", "protocol": "Panasonic", "address": "0x8", "command":"0x4E", "raw":"0xCE4E00802002", "bits": 100},
+        {"name": "Right", "protocol": "Panasonic", "address": "0x8", "command":"0x4F", "raw":"0xCF4F00802002", "bits": 100},
+        {"name": "Ok", "protocol": "Panasonic", "address": "0x8", "command":"0x49", "raw":"0xC94900802002", "bits": 100},
+        {"name": "Exit", "protocol": "Panasonic", "address": "0x8", "command":"0xD3", "raw":"0x53D300802002", "bits": 100},
+        {"name": "Apps", "protocol": "Panasonic", "address": "0x98", "command":"0x8F", "raw":"0x68F09802002", "bits": 100}
+      ]
+    },
+    {
+      "name": "Set Top Box Remote",
+      "brand": "Asianet",
+      "buttons": [
+        {"name": "Power", "protocol": "NEC", "address": "0xDF", "command":"0x59", "raw":"0xA65900DF", "bits": 68},
+        {"name": "Mute", "protocol": "NEC", "address": "0xDF", "command":"0x95", "raw":"0x6A9500DF", "bits": 68},
+        {"name": "Volume Up", "protocol": "NEC", "address": "0xDF", "command":"0x80", "raw":"0x7F8000DF", "bits": 68},
+        {"name": "Volume Down", "protocol": "NEC", "address": "0xDF", "command":"0x81", "raw":"0x7E8100DF", "bits": 68},
+        {"name": "Next Channel", "protocol": "NEC", "address": "0xDF", "command":"0x85", "raw":"0x7A8500DF", "bits": 68},
+        {"name": "Previous Channel", "protocol": "NEC", "address": "0xDF", "command":"0x86", "raw":"0x798600DF", "bits": 68},
+        {"name": "1", "protocol": "NEC", "address": "0xDF", "command":"0x86", "raw":"0x798600DF", "bits": 68},
+        {"name": "2", "protocol": "NEC", "address": "0xDF", "command":"0x93", "raw":"0x6C9300DF", "bits": 68},
+        {"name": "3", "protocol": "NEC", "address": "0xDF", "command":"0xCC", "raw":"0x33CC00DF", "bits": 68},
+        {"name": "4", "protocol": "NEC", "address": "0xDF", "command":"0x8E", "raw":"0x718E00DF", "bits": 68},
+        {"name": "5", "protocol": "NEC", "address": "0xDF", "command":"0x8F", "raw":"0x708F00DF", "bits": 68},
+        {"name": "6", "protocol": "NEC", "address": "0xDF", "command":"0xC8", "raw":"0x37C800DF", "bits": 68},
+        {"name": "7", "protocol": "NEC", "address": "0xDF", "command":"0x8A", "raw":"0x758A00DF", "bits": 68},
+        {"name": "8", "protocol": "NEC", "address": "0xDF", "command":"0x8B", "raw":"0x748B00DF", "bits": 68},
+        {"name": "9", "protocol": "NEC", "address": "0xDF", "command":"0xC4", "raw":"0x3BC400DF", "bits": 68},
+        {"name": "0", "protocol": "NEC", "address": "0xDF", "command":"0x87", "raw":"0x788700DF", "bits": 68}
+      ]
+    }
+  ]
+}
