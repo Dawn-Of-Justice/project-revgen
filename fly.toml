@@ -1,0 +1,59 @@
+# fly.toml -- RevGen backend
+#
+# Run `fly launch --no-deploy` once to claim the app name, then `fly deploy`.
+
+app = "revgen"
+primary_region = "bom"   # Mumbai: closest region to Kerala. Every 100ms of
+                         # network latency comes straight out of the 1.2s
+                         # budget for starting her confirmation.
+
+[build]
+
+[env]
+  DATA_DIR = "/data"
+  # Hosted brokers (HiveMQ Cloud, EMQX) are TLS on 8883.
+  MQTT_TLS = "true"
+  MQTT_PORT = "8883"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+
+  # Do NOT let Fly stop the machine. A cold start would add seconds to the
+  # first command of the morning, which is exactly the one she is least
+  # patient with. Keeping one shared-cpu-1x machine warm is within the free
+  # allowance.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # Never raise this above 1. The power debounce is in-process state; a second
+  # machine would keep its own timer, and the rule that stops her repeated
+  # "TV on" from switching the set back off would quietly stop working.
+  # Scaling out requires moving resolver.State to a shared store first.
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 8
+    hard_limit = 16
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+    timeout = "5s"
+
+# Persists the TTS cache and the utterance log across deploys. Without it every
+# deploy would regenerate ~20 phrases against the bulbul:v3 rate limit and lose
+# the log you need to debug her problems remotely.
+#
+#   fly volumes create revgen_data --region bom --size 1
+[[mounts]]
+  source = "revgen_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  cpus = 1

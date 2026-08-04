@@ -1,0 +1,22 @@
+.git
+.gitignore
+.gitattributes
+
+# secrets and local state -- never bake these into an image
+**/.env
+**/venv
+**/.venv
+backend/recordings
+backend/cache
+backend/logs
+
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+
+# not needed at runtime
+backend/tests
+firmware
+archive
+docs
+*.md

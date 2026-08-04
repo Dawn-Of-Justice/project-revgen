@@ -1,106 +1,69 @@
-# Voice-Controlled IR Remote System
+# RevGen
 
-A voice-controlled system designed to help elderly people interact with electronic devices through natural language commands in Malayalam. This system replaces traditional remote controls with voice commands, making technology more accessible.
+A voice-controlled replacement for two remote controls, in Malayalam.
 
-## System Overview
-
-This project consists of two physical ESP32 devices that communicate through a cloud service:
-
-1. **Voice Input Device**: Captures voice commands, sends audio to the cloud for processing
-2. **IR Output Device**: Receives commands from the cloud and transmits appropriate IR signals to devices
+Built for a grandmother who knows perfectly well what the television and the
+set-top box are — she just cannot tell which of the two remotes does what. She
+presses one button, says what she wants, and hears a confirmation.
 
 ```
-Voice Input → Cloud Processing → IR Output → Electronic Device
+"TV ഓണാക്കുവോ? ഉം. and sound-ഉം കൂടെ കൂട്ടണേ കുറച്ച്."
+   → tv.power, wait 2.5s, tv.volume_up ×2
+   → "ടിവി ഓണാക്കി. ശബ്ദം കൂട്ടി."
 ```
 
-## Features
+## Layout
 
-- **Multilingual Support**: Optimized for Malayalam language voice commands
-- **Natural Language Understanding**: Process conversational commands rather than strict syntax
-- **Long Battery Life**: Optimized for 7+ days on a single charge with regular use
-- **Wireless Communication**: No physical connection between devices
-- **Extendable**: Can be programmed to control any IR-compatible device
+| Path | What it is | State |
+|---|---|---|
+| `backend/` | STT → intent → resolver → MQTT → TTS | **working**, 47 tests |
+| `Dockerfile`, `fly.toml` | Deploy config (root, because the image needs `config/`) | ready |
+| `config/commands.json` | IR codes, channels, Malayalam phrases — single source of truth | needs her channel numbers |
+| `firmware/emitter/` | IR blaster by the TV | v1 sketch, serial only; needs MQTT |
+| `firmware/remote/` | The handheld | not started |
+| `archive/v1/` | Superseded v1 code, kept for provenance | — |
+| `docs/` | Pinouts, transmitter spec sheet | — |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Why it is built this way, and what was rejected | — |
 
-## Hardware Components
+## Start here
 
-### Voice Input Device
-- ESP32 microcontroller
-- INMP441 I2S MEMS Microphone
-- Speaker (MAX98357A amplifier)
-- 5000mAh LiPo battery
-- Charging circuit (TP4056)
-- Pushbutton for activation
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate   # Windows: .\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+pytest                      # 47 tests, no network or hardware needed
+```
 
-### IR Output Device
-- ESP32 microcontroller
-- IR LED (940nm)
-- NPN transistor (2N2222A)
-- 100Ω resistor
+Then, with a Sarvam key in `backend/.env`:
 
-## Cloud Service
+```bash
+python tools/check_sarvam.py recordings/     # does it understand her?
+uvicorn app.main:app --reload
+python tools/send_wav.py recordings/tv_on.m4a
+```
 
-The system uses a backend service deployed on Render.com with these features:
-- Speech-to-text conversion using Google Cloud Speech API
-- Malayalam to English translation
-- Natural language processing to extract commands
-- Device control command formatting
+See [`backend/README.md`](backend/README.md) for the detail.
 
-## Setup Instructions
+## Where it stands
 
-### Cloud Backend Setup
-1. Clone this repository
-2. Create a Google Cloud Platform account
-3. Enable Speech-to-Text and Translation APIs
-4. Create a service account and download credentials
-5. Deploy the Flask application to Render.com
-6. Set up environment variables on Render:
-   - `GOOGLE_APPLICATION_CREDENTIALS` (upload the JSON file)
+Phase 0 passed — Saaras transcribed her first recording correctly, including
+code-mixing, filler and a polite interrogative ending. Phase 2 (backend) is
+written and tested.
 
-### Voice Input Device
-1. Flash the ESP32 with the provided code
-2. Update WiFi credentials and server endpoint
-3. Connect components according to the wiring diagram
-4. Test with voice commands
+Next is the emitter: `firmware/emitter/emitter.ino` already parses the command
+grammar over serial, so the work is replacing `Serial.readString()` with an MQTT
+callback. After that a recorded WAV from a laptop can control the TV, and the
+handheld is the only unknown left in the system.
 
-### IR Output Device
-1. Flash the ESP32 with the provided code
-2. Update WiFi credentials
-3. Connect components according to the wiring diagram
-4. Program IR codes for specific devices
+Two known-bad IR codes are flagged in `config/commands.json` and the backend
+refuses to fire them rather than sending the wrong signal. Recapturing needs a
+TSOP1838; nothing else is blocked on it.
 
-## Usage
+## Design in one paragraph
 
-1. Press the button on the Voice Input Device
-2. Speak a command in Malayalam
-3. Wait for cloud processing (typically 2-3 seconds)
-4. The IR Output Device will transmit the appropriate signal
-
-### Example Commands
-
-| Malayalam Command | English Equivalent | Action |
-|-------------------|-------------------|--------|
-| ടിവി ഓൺ ആക്കൂ | Turn on TV | Sends TV power signal |
-| ശബ്ദം കൂട്ടുക | Increase volume | Sends volume up signal |
-| ചാനൽ മാറ്റുക | Change channel | Sends channel change signal |
-
-## Battery Life
-
-The Voice Input Device uses a 5000mAh battery optimized for low power consumption:
-- ~100mA average current during operation
-- Deep sleep between commands (~20μA)
-- Estimated 7-9 days of battery life with ~50 daily commands
-
-## Future Enhancements
-
-- Support for additional languages
-- Local speech processing to reduce latency
-- Bluetooth connectivity option
-- Home automation integration
-- Custom wake word instead of button press
-
-## References
-- [Esp32 Pinout](https://www.electronicshub.org/esp32-pinout/)
-
-## License
-
-This project is released under the MIT License.
+The language model never emits button presses — it returns *goals*
+(`power_on`, `volume_up`) from a fixed vocabulary, and plain Python turns goals
+into IR. That split exists because IR is open-loop and most buttons are toggles:
+firing `tv.power` at a TV that is already on turns it off, and no model can know
+which case it is in. The safety rules that prevent that live in
+`backend/app/resolver.py`, which has no I/O and is entirely unit tested.

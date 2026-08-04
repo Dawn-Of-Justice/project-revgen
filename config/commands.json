@@ -1,0 +1,102 @@
+{
+  "_about": "Single source of truth for IR codes. The backend sends full descriptors to the emitter, so adding a device or fixing a code never requires reflashing hardware.",
+  "_status": {
+    "verified": false,
+    "note": "Codes carried over from v1 signal.json. All were captured from real remotes, but stb.1 is a known copy-paste of stb.ch_down and tv.apps looks malformed. Recapture with a TSOP1838 and set verified=true per device."
+  },
+
+  "devices": {
+    "tv": {
+      "label_ml": "ടിവി",
+      "brand": "Panasonic",
+      "protocol": "panasonic",
+      "address": 8,
+      "verified": false,
+      "buttons": {
+        "power":      { "command": 61 },
+        "volume_up":  { "command": 32 },
+        "volume_down":{ "command": 33 },
+        "up":         { "command": 74 },
+        "down":       { "command": 75 },
+        "left":       { "command": 78 },
+        "right":      { "command": 79 },
+        "ok":         { "command": 73 },
+        "exit":       { "command": 211 }
+      },
+      "_unverified_buttons": {
+        "apps": { "command": 143, "address": 152, "note": "address differs from every other TV button and the v1 raw value had 11 hex digits where others had 12. Recapture before using." }
+      },
+      "discrete": {
+        "_note": "Populate during the Phase 0 command sweep. If power_on/power_off exist, the resolver stops using toggles for this device automatically.",
+        "power_on": null,
+        "power_off": null,
+        "mute_off": null
+      }
+    },
+
+    "stb": {
+      "label_ml": "ബോക്സ്",
+      "brand": "Asianet",
+      "protocol": "nec_raw",
+      "verified": false,
+      "buttons": {
+        "power":        { "raw": "0xA65900DF" },
+        "mute":         { "raw": "0x6A9500DF" },
+        "volume_up":    { "raw": "0x7F8000DF" },
+        "volume_down":  { "raw": "0x7E8100DF" },
+        "channel_up":   { "raw": "0x7A8500DF" },
+        "channel_down": { "raw": "0x798600DF" },
+        "digit_0":      { "raw": "0x788700DF" },
+        "digit_2":      { "raw": "0x6C9300DF" },
+        "digit_3":      { "raw": "0x33CC00DF" },
+        "digit_4":      { "raw": "0x718E00DF" },
+        "digit_5":      { "raw": "0x708F00DF" },
+        "digit_6":      { "raw": "0x37C800DF" },
+        "digit_7":      { "raw": "0x758A00DF" },
+        "digit_8":      { "raw": "0x748B00DF" },
+        "digit_9":      { "raw": "0x3BC400DF" }
+      },
+      "_broken_buttons": {
+        "digit_1": { "raw": "0x798600DF", "note": "IDENTICAL to channel_down. Copy-paste bug from v1. Any channel containing a 1 is unusable until this is recaptured." }
+      },
+      "discrete": {
+        "power_on": null,
+        "power_off": null,
+        "mute_off": null
+      }
+    }
+  },
+
+  "channels": {
+    "_note": "PLACEHOLDER numbers. Replace with her actual box's channel numbers before use. Names are what she is likely to say; the LLM matches loosely, so near-misses from STT still resolve.",
+    "ഏഷ്യാനെറ്റ്": null,
+    "സൂര്യ ടിവി": null,
+    "മഴവിൽ മനോരമ": null,
+    "ഫ്ലവേഴ്സ്": null,
+    "കൈരളി": null,
+    "ഏഷ്യാനെറ്റ് ന്യൂസ്": null,
+    "മനോരമ ന്യൂസ്": null,
+    "അമൃത ടിവി": null
+  },
+
+  "phrases": {
+    "_about": "Every reachable outcome needs a phrase. Silence is indistinguishable from a dead device.",
+    "tv.power_on":     "ടിവി ഓണാക്കി",
+    "tv.power_off":    "ടിവി ഓഫാക്കി",
+    "tv.volume_up":    "ശബ്ദം കൂട്ടി",
+    "tv.volume_down":  "ശബ്ദം കുറച്ചു",
+    "stb.power_on":    "ബോക്സ് ഓണാക്കി",
+    "stb.power_off":   "ബോക്സ് ഓഫാക്കി",
+    "stb.channel_up":  "ചാനൽ മാറ്റി",
+    "stb.channel_down":"ചാനൽ മാറ്റി",
+    "stb.channel_set": "{channel} ഇട്ടു",
+
+    "err.not_understood":  "എനിക്ക് മനസ്സിലായില്ല, ഒന്നുകൂടി പറയാമോ?",
+    "err.too_soon":        "ഒന്ന് കാത്തിരിക്കൂ",
+    "err.emitter_offline": "ടിവി ബോക്സുമായി ബന്ധം കിട്ടുന്നില്ല",
+    "err.no_ack":          "പറ്റിയില്ല, ഒന്നുകൂടി ശ്രമിക്കാമോ?",
+    "err.unknown_channel": "ആ ചാനൽ എനിക്ക് അറിയില്ല",
+    "err.broken_code":     "അത് ഇപ്പോൾ ചെയ്യാൻ പറ്റില്ല",
+    "err.internal":        "എന്തോ കുഴപ്പം ഉണ്ട്"
+  }
+}

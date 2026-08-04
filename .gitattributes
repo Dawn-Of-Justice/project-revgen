@@ -1,0 +1,11 @@
+# Normalise line endings. Without this, editing from Windows/OneDrive and from
+# a Linux toolchain flips CRLF<->LF on whole files and every diff is noise.
+* text=auto eol=lf
+
+# Binary
+*.png binary
+*.webp binary
+*.pdf binary
+*.wav binary
+*.mp3 binary
+*.m4a binary

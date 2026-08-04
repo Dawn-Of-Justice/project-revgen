@@ -1,3 +1,18 @@
+# credentials
 avaproduction-be001f508653.json
 project-revgen-3929193e6ca4.json
-venv
+.env
+*.pem
+
+# python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# generated
+backend/cache/
+backend/logs/
+recordings/
+reply.wav
