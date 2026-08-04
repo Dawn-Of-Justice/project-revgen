@@ -43,12 +43,14 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "device_token", "")
 
     from app import main
+    from app.ratelimit import Limiter
     from app.resolver import State
 
-    # main.state is a module-level singleton -- deliberately, since the debounce
-    # must outlive a request. That also means it leaks between tests, so each
-    # one starts from a clean slate.
+    # main.state and main.limiter are module-level singletons -- deliberately,
+    # since both must outlive a request. That also means they leak between
+    # tests, so each one starts from a clean slate.
     monkeypatch.setattr(main, "state", State())
+    monkeypatch.setattr(main, "limiter", Limiter(per_minute=1000, per_day=10_000))
 
     with TestClient(main.app) as c:
         yield c
@@ -117,6 +119,56 @@ def test_token_is_required_when_configured(client, monkeypatch):
     assert post(client).status_code == 401
     assert post(client, headers={"X-RevGen-Token": "wrong"}).status_code == 401
     assert post(client, headers={"X-RevGen-Token": "correct-horse"}).status_code == 200
+
+
+def test_burst_gets_429_without_touching_sarvam(client, monkeypatch):
+    from app import main, stt
+    from app.ratelimit import Limiter
+
+    calls: list[str] = []
+    monkeypatch.setattr(main, "limiter", Limiter(per_minute=3, per_day=100))
+    monkeypatch.setattr(stt, "transcribe", lambda *a, **k: calls.append("stt"))
+
+    codes = [post(client).status_code for _ in range(6)]
+    assert codes[:3] == [200, 200, 200]
+    assert codes[3:] == [429, 429, 429]
+    assert "Retry-After" in post(client).headers
+    assert calls == [], "a throttled request must not reach Saaras"
+
+
+def test_daily_cap_answers_in_malayalam_rather_than_a_bare_429(client, monkeypatch):
+    """Heavy use might be genuine, so she is told out loud instead of ignored."""
+    from app import main
+    from app.ratelimit import Limiter
+
+    monkeypatch.setattr(main, "limiter", Limiter(per_minute=1000, per_day=2))
+    post(client)
+    post(client)
+
+    capped = post(client)
+    assert capped.status_code == 200
+    assert capped.headers["X-RevGen-Outcome"] == "err.rate_limited"
+    assert len(capped.content) > 0
+
+
+def test_rejected_request_has_no_side_effects(client, monkeypatch):
+    """A 401 must not transcribe and must not fire IR.
+
+    The status code alone is not the guarantee worth having -- what matters is
+    that an unauthorised caller cannot change her television, and cannot run up
+    a Sarvam bill either. _authorise() is the first statement in the handler,
+    ahead of file.read(), so nothing downstream is reached.
+    """
+    from app import main, stt
+
+    calls: list[str] = []
+    monkeypatch.setattr(settings, "device_token", "correct-horse")
+    monkeypatch.setattr(stt, "transcribe", lambda *a, **k: calls.append("stt"))
+    monkeypatch.setattr(main.emitter, "send", lambda *a, **k: calls.append("ir"))
+
+    assert post(client).status_code == 401
+    assert post(client, headers={"X-RevGen-Token": "nope"}).status_code == 401
+    assert calls == [], "unauthorised request reached STT or the emitter"
 
 
 def test_no_token_configured_means_open(client):

@@ -31,6 +31,7 @@ from fastapi.responses import JSONResponse
 from . import audio, logbook, resolver
 from .catalog import Catalog
 from .config import settings
+from .ratelimit import Limiter
 from .emitter import EmitterOffline, EmitterTimeout, emitter
 from .intent import IntentError, extract
 from .resolver import State
@@ -43,6 +44,10 @@ log = logging.getLogger("revgen")
 
 catalog = Catalog.load(settings.catalog_path)
 state = State()
+limiter = Limiter(
+    per_minute=settings.rate_limit_per_min,
+    per_day=settings.rate_limit_per_day,
+)
 
 
 @asynccontextmanager
@@ -68,6 +73,31 @@ def _authorise(token: str | None) -> None:
         raise HTTPException(status_code=401, detail="bad or missing device token")
 
 
+async def _spoken(
+    phrase_key: str, started: float, extra_headers: dict[str, str] | None = None
+) -> Response:
+    """Return one cached phrase as audio. Used for early exits.
+
+    Kept separate from the main path so a guard can answer her out loud without
+    running any of the pipeline behind it.
+    """
+    text = catalog.phrase(phrase_key)
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    logbook.record(transcript="", intents=[], outcome=phrase_key, reply=text,
+                   elapsed_ms=elapsed_ms, bytes_in=0)
+    log.info("%sms  [guard] -> %s", elapsed_ms, phrase_key)
+
+    headers = {"X-RevGen-Outcome": phrase_key, "X-RevGen-Elapsed-Ms": str(elapsed_ms)}
+    headers.update(extra_headers or {})
+    try:
+        return Response(content=await speak_all([text]), media_type="audio/wav",
+                        headers=headers)
+    except Exception:
+        log.exception("tts failed in guard path")
+        return JSONResponse({"outcome": phrase_key, "reply": text, "audio": False},
+                            status_code=200, headers=extra_headers or {})
+
+
 @app.get("/health")
 async def health() -> dict:
     return {
@@ -80,6 +110,13 @@ async def health() -> dict:
         "audio_formats": sorted(
             e.lstrip(".") for e in audio.SUPPORTED_EXTENSIONS
         ),
+        # Watch `today` climbing when nobody is using it -- that is what a
+        # firmware retry loop looks like from here.
+        "requests": limiter.stats,
+        "limits": {
+            "per_minute": settings.rate_limit_per_min,
+            "per_day": settings.rate_limit_per_day,
+        },
     }
 
 
@@ -89,8 +126,28 @@ async def command(
     x_revgen_token: str | None = Header(default=None),
 ) -> Response:
     _authorise(x_revgen_token)
-
     started = time.monotonic()
+
+    # Both guards sit above file.read() and everything paid. Order matters:
+    # a caller that should not be here must not be able to run up a bill.
+    verdict = limiter.check(time.time())
+    if not verdict.allowed:
+        if verdict.reason == "minute":
+            # Almost certainly a client retry loop, not a person. Give it a
+            # bare 429 -- serving cached audio thousands of times would just
+            # move the waste from Sarvam to bandwidth.
+            raise HTTPException(
+                status_code=429,
+                detail="rate limit exceeded",
+                headers={"Retry-After": str(verdict.retry_after_s)},
+            )
+        # The daily cap could plausibly be real (heavy but genuine use), so she
+        # gets told in Malayalam rather than met with silence. The phrase is
+        # cached, so saying it costs nothing.
+        return await _spoken(
+            "err.rate_limited", started, extra_headers={"Retry-After": "3600"}
+        )
+
     data = await file.read()
 
     if len(data) > settings.max_upload_bytes:

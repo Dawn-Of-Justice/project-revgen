@@ -59,6 +59,17 @@ class Settings(BaseSettings):
     # something is wrong and we should not pay Saaras to find out what.
     max_upload_bytes: int = 1_000_000
 
+    # --- Spend guard ----------------------------------------------------
+    # Saaras is ~₹0.03 per 4s command, so the bill tracks request count. She
+    # will use this maybe 50 times a day; a firmware retry loop could do 50
+    # times that overnight.
+    #
+    # 20/min is far above any human and far below a loop. 200/day is 4x
+    # expected use, capping the worst case at roughly ₹7 for a bad day rather
+    # than an open-ended bill.
+    rate_limit_per_min: int = 20
+    rate_limit_per_day: int = 200
+
     # --- Paths ----------------------------------------------------------
     catalog_path: Path = REPO_ROOT / "config" / "commands.json"
     # Overridden to the mounted volume in production so the TTS cache and logs

@@ -86,8 +86,12 @@ def main() -> int:
     server_ms = response.headers.get("X-RevGen-Elapsed-Ms", "?")
     print(f"{response.status_code}  outcome={outcome}  server={server_ms}ms  total={elapsed}ms")
 
+    upload_ms = elapsed - int(server_ms) if server_ms.isdigit() else None
+    if upload_ms is not None:
+        print(f"  network={upload_ms}ms  (upload dominates; 6s of 16kHz mono WAV is 192KB)")
     if elapsed > 3000:
-        print("  slow: budget is 3s end to end, and 1.2s to the start of playback")
+        print("  slow: soft target is 3s for the spoken reply. The instant"
+              " acknowledgement is a local beep on the device, not this.")
 
     if response.headers.get("content-type", "").startswith("audio/"):
         out = Path("reply.wav")

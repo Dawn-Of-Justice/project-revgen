@@ -78,9 +78,23 @@ the second toggle undoes the first.
 
 Two fixes, both nearly free:
 
-1. **Confirm fast and out loud.** A cached Malayalam reply beginning within
-   ~1.2s removes the uncertainty that causes the repeat. The TTS cache is a
-   latency mechanism, not a cost optimisation.
+1. **Acknowledge instantly, confirm when done.** Two sounds, not one:
+
+   - **A local beep the moment she stops speaking**, generated on the device.
+     Zero network, zero latency. This is what actually stops the repetition,
+     because the thing she is uncertain about is whether it *heard* her.
+   - **The Malayalam confirmation** when the round trip completes, telling her
+     what was done.
+
+   The original design put the whole burden on the spoken reply and set a 1.2s
+   budget for it. Measured on the deployed backend that is not achievable:
+   ~1.6s server-side plus upload, and upload does not shrink in production --
+   six seconds of 16kHz mono WAV is 192KB, larger than a compressed phone
+   recording of the same utterance.
+
+   Splitting the two makes the hard number a firmware concern (a beep, which is
+   free) and leaves the spoken reply on a soft ~3s target. The TTS cache still
+   matters, but for the reply rather than the acknowledgement.
 2. **Debounce power commands** for 8 seconds per device, and say
    "ഒന്ന് കാത്തിരിക്കൂ" instead of firing.
 
