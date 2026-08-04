@@ -1,67 +1,41 @@
-# fly.toml -- RevGen backend
+# fly.toml app configuration file generated for project-revgen on 2026-08-04T18:42:00Z
 #
-# Run `fly launch --no-deploy` once to claim the app name, then `fly deploy`.
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "revgen"
-primary_region = "bom"   # Mumbai: closest region to Kerala. Every 100ms of
-                         # network latency comes straight out of the 1.2s
-                         # budget for starting her confirmation.
+app = 'project-revgen'
+primary_region = 'bom'
 
 [build]
 
 [env]
-  DATA_DIR = "/data"
-  # Hosted brokers (HiveMQ Cloud, EMQX) are TLS on 8883.
-  MQTT_TLS = "true"
-  MQTT_PORT = "8883"
+  DATA_DIR = '/data'
+  MQTT_PORT = '8883'
+  MQTT_TLS = 'true'
 
 [http_service]
   internal_port = 8080
   force_https = true
-
-  # Do NOT let Fly stop the machine. A cold start would add seconds to the
-  # first command of the morning, which is exactly the one she is least
-  # patient with. Keeping one shared-cpu-1x machine warm is within the free
-  # allowance.
-  auto_stop_machines = false
+  auto_stop_machines = 'off'
   auto_start_machines = true
   min_machines_running = 1
 
-  # Never raise this above 1. The power debounce is in-process state; a second
-  # machine would keep its own timer, and the rule that stops her repeated
-  # "TV on" from switching the set back off would quietly stop working.
-  # Scaling out requires moving resolver.State to a shared store first.
   [http_service.concurrency]
-    type = "requests"
-    soft_limit = 8
+    type = 'requests'
     hard_limit = 16
+    soft_limit = 8
 
   [[http_service.checks]]
-    grace_period = "15s"
-    interval = "30s"
-    method = "GET"
-    path = "/health"
-    protocol = "http"
-    timeout = "5s"
-
-# Persists the TTS cache and the utterance log across deploys. Without it every
-# deploy regenerates ~20 phrases against the bulbul:v3 rate limit and throws
-# away the log you need to debug her problems from a distance.
-#
-# COMMENTED OUT FOR THE FIRST DEPLOY. A volume cannot be created until the app
-# exists, so a mount pointing at a volume that is not there fails the deploy
-# with "volume 'revgen_data' not found". After the first successful deploy:
-#
-#   fly volumes create revgen_data --region bom --size 1
-#
-# then uncomment and `fly deploy` again. Until then /data is container-local:
-# the service works, but the cache and log are wiped on every deploy.
-#
-# [[mounts]]
-#   source = "revgen_data"
-#   destination = "/data"
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '15s'
+    method = 'GET'
+    path = '/health'
+    protocol = 'http'
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+  cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 512
