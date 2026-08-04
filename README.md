@@ -16,10 +16,10 @@ presses one button, says what she wants, and hears a confirmation.
 
 | Path | What it is | State |
 |---|---|---|
-| `backend/` | STT → intent → resolver → MQTT → TTS | **working**, 66 tests |
+| `backend/` | STT → intent → resolver → MQTT → TTS | **deployed & verified end to end**, 66 tests |
 | `Dockerfile`, `fly.toml` | Deploy config (root, because the image needs `config/`) | ready |
 | `config/commands.json` | IR codes, channels, Malayalam phrases — single source of truth | needs her channel numbers |
-| `firmware/emitter/` | IR blaster by the TV | **written**, MQTT + LWT; untested on hardware |
+| `firmware/emitter/` | IR blaster by the TV | **written**, protocol verified; untested on hardware |
 | `firmware/remote/` | The handheld | not started (XIAO ESP32S3 + custom PCB) |
 | `archive/v1/` | Superseded v1 code, kept for provenance | — |
 | `docs/` | Pinouts, spec sheet, parts list | — |
@@ -47,14 +47,15 @@ See [`backend/README.md`](backend/README.md) for the detail.
 
 ## Where it stands
 
-Phase 0 passed — Saaras transcribed her first recording correctly, including
-code-mixing, filler and a polite interrogative ending. Phase 2 (backend) is
-written and tested.
+Phases 0 and 2 are done. Saaras transcribed her first recording correctly —
+code-mixing, filler and a polite interrogative ending intact — and the deployed
+backend turns it into the right five-step IR sequence and answers in Malayalam,
+end to end in ~3.9s (upload dominates; see ARCHITECTURE.md).
 
-Next is the emitter: `firmware/emitter/emitter.ino` already parses the command
-grammar over serial, so the work is replacing `Serial.readString()` with an MQTT
-callback. After that a recorded WAV from a laptop can control the TV, and the
-handheld is the only unknown left in the system.
+The emitter firmware is written and validated against
+`backend/tools/fake_emitter.py`, which impersonates it over the real broker and
+enforces the same rules. Once the parts arrive it needs flashing and pointing at
+a TV — after that the handheld is the only unknown left in the system.
 
 Two known-bad IR codes are flagged in `config/commands.json` and the backend
 refuses to fire them rather than sending the wrong signal. Recapturing needs a

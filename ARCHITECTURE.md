@@ -179,8 +179,26 @@ command grammar over serial; replace `Serial.readString()` with an MQTT
 callback. An afternoon, using hardware you already own. Ends with: you control
 the TV from a terminal.
 
-**2 — Backend end to end.** ✅ *Written.* Ends with: a recorded WAV from your
-laptop controls the TV, whole intelligence layer proven, no new hardware.
+**2 — Backend end to end.** ✅ *Done and deployed* (Fly, `bom`). A recorded
+utterance returns `outcome=tv.power_on` with the correct five-step IR sequence
+on the wire and a Malayalam confirmation spoken back. Verified against
+`tools/fake_emitter.py`, which mirrors the firmware's validation rules.
+
+Measured on the deployed instance, 155KB m4a from a laptop in Kerala:
+
+| | ms |
+|---|---|
+| Server total (STT + intent + resolve + MQTT + ack + cached TTS) | 1,732 |
+| — of which the MQTT round trip via Frankfurt | ~160 |
+| Network (upload) | 2,158 |
+| **End to end** | **3,890** |
+
+Two things this settles. The EU broker costs ~160ms, not the ~500ms feared, so
+self-hosting Mosquitto on the Fly machine is not worth doing. And **upload
+dominates** — the 155KB test file is mostly silence, and a tight 2–3s utterance
+(~96KB at the measured 72KB/s) lands the total near 3s. Stopping the recording
+on silence is therefore the single highest-value firmware behaviour, worth more
+than any backend optimisation.
 
 **3 — Voice unit.** XIAO ESP32S3 (ESP32-S3, 8MB PSRAM, LiPo charging) on a
 custom carrier PCB, in a 3D printed case shaped like a TV remote — roughly

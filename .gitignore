@@ -1,8 +1,11 @@
-# credentials
+# credentials -- this repo is PUBLIC.
+# A Groq key was committed in .env in April 2025 and had to be revoked. Assume
+# anything that lands here is scraped within minutes.
 avaproduction-be001f508653.json
 project-revgen-3929193e6ca4.json
 .env
 *.pem
+firmware/**/secrets.h
 
 # python
 venv/

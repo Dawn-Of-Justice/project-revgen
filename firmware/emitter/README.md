@@ -35,11 +35,33 @@ microphone, not a pointer, and this box never moves.
 Mains USB, no battery. A stationary device with a battery is just a device that
 eventually dies without warning.
 
+## Broker
+
+HiveMQ Cloud free tier, TLS on 8883.
+
+**This repo is public**, so the cluster hostname and credentials live in
+`secrets.h`, which is gitignored:
+
+```bash
+cp secrets.example.h secrets.h    # then fill it in
+```
+
+Create a credential under **Access Management → Credentials** with publish and
+subscribe rights — the cluster URL alone will not authenticate. Use *separate*
+credentials for the firmware and the backend, so revoking one does not take the
+other down.
+
+The free plan has no Asian region, so traffic routes Mumbai → Frankfurt →
+Kerala and back, adding roughly 500ms per command. Acceptable because the ack is
+published before IR execution, so nothing times out. If that ever needs fixing,
+run Mosquitto on the Fly machine itself rather than paying for a region — the
+backend-to-broker hop then costs nothing and only the emitter's link to Mumbai
+(~40ms) remains.
+
 ## First run
 
-1. Set `MQTT_HOST` / `MQTT_USER` / `MQTT_PASS` at the top of `emitter.ino`.
-   Use `MQTT_TLS = true` with port 8883 for a hosted broker, `false` / 1883
-   for a local Mosquitto.
+1. `cp secrets.example.h secrets.h` and fill in the cluster hostname, username
+   and password. Never commit it.
 2. Flash. On first boot it opens a WiFi access point called **RevGen-Setup** —
    join it and pick her network. Credentials persist; a router change means
    redoing this, not reflashing.

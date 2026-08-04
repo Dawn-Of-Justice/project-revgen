@@ -61,11 +61,24 @@
   #define STATUS_LED_ACTIVE_LOW 0
 #endif
 
-static const char *MQTT_HOST = "xxxxx.s1.eu.hivemq.cloud";
-static const int   MQTT_PORT = 8883;          // 1883 for a plain local broker
-static const char *MQTT_USER = "revgen";
-static const char *MQTT_PASS = "";
-static const bool  MQTT_TLS  = true;
+/*
+ * Credentials live in secrets.h, which is gitignored. This repo is public.
+ *
+ *     cp secrets.example.h secrets.h     and fill it in
+ *
+ * HiveMQ Cloud's free tier has no Asian region, so every command routes
+ * Mumbai -> Frankfurt -> Kerala and the ack returns the same way: roughly
+ * 500ms of pure geography. Tolerable, because the ack is published before IR
+ * execution so nothing times out. If it ever needs fixing, run Mosquitto on
+ * the Fly machine itself rather than paying for a region.
+ */
+#include "secrets.h"
+
+static const char *MQTT_HOST = MQTT_HOST_STR;
+static const int   MQTT_PORT = MQTT_PORT_NUM;
+static const char *MQTT_USER = MQTT_USER_STR;
+static const char *MQTT_PASS = MQTT_PASS_STR;
+static const bool  MQTT_TLS  = MQTT_TLS_ON;
 
 static const char *TOPIC_CMD    = "revgen/emitter/cmd";
 static const char *TOPIC_ACK    = "revgen/emitter/ack";
