@@ -5,7 +5,7 @@ boring. That split is the direct lesson from v1, where the smartest component
 was a microcontroller in someone else's house.
 
 ```
-WAV -> Saaras (STT) -> Sarvam-30B (intent) -> resolver -> MQTT -> ack -> Bulbul (cached)
+WAV -> Saaras (STT) -> Sarvam-105B (intent) -> resolver -> MQTT -> ack -> Bulbul (cached)
 ```
 
 ## Run it
@@ -60,22 +60,32 @@ You need an MQTT broker both sides can reach. The emitter is behind her home
 NAT, so it must be one the emitter dials out to — HiveMQ Cloud's free tier
 (100 connections) is more than enough.
 
+All `fly` commands run from the **repo root**, because that is where
+`fly.toml` is and flyctl reads it to know which app you mean.
+
 ```bash
 cd ..                       # repo root
-fly launch --no-deploy      # claim the app name, keep the existing fly.toml
-fly volumes create revgen_data --region bom --size 1
+fly apps list               # confirm the name matches `app =` in fly.toml
 
 fly secrets set \
   SARVAM_API_KEY=sk_xxx \
   MQTT_HOST=xxxxx.s1.eu.hivemq.cloud \
   MQTT_USERNAME=revgen \
   MQTT_PASSWORD=... \
-  DEVICE_TOKEN=$(python -c "import secrets;print(secrets.token_urlsafe(32))")
+  DEVICE_TOKEN=<generate one>
 
+# The volume can only be created after the app exists.
+fly volumes create revgen_data --region bom --size 1
+# then uncomment [[mounts]] in fly.toml
 fly deploy
+
 fly ssh console -C "python tools/build_tts_cache.py"   # onto the volume, once
-curl https://revgen.fly.dev/health
+curl https://project-revgen.fly.dev/health
 ```
+
+Each `fly secrets set` restarts the machine on its own. On Windows use one line
+rather than backslash continuations, and generate the token separately with
+`python -c "import secrets;print(secrets.token_urlsafe(32))"`.
 
 `DEVICE_TOKEN` matters the moment this has a public URL — without it anyone who
 finds the hostname can POST audio and control her television. The remote sends
@@ -84,10 +94,13 @@ it as `X-RevGen-Token`.
 ### Never scale past one machine
 
 ```
-min_machines_running = 1     # keep it warm: a cold start blows the 1.2s budget
-                             # on the first command of the morning
-auto_stop_machines  = false
+min_machines_running = 1       # keep it warm: a cold start blows the 1.2s
+auto_stop_machines   = 'off'   # budget on the first command of the morning
 ```
+
+`fly launch` rewrites `fly.toml` and strips comments. If it ever regenerates the
+file, check those two lines plus `memory = '512mb'` and `primary_region = 'bom'`
+survived.
 
 And do not raise the count. The power debounce lives in process memory, so a
 second machine keeps its own timer and the rule that stops her repeated "TV on"
