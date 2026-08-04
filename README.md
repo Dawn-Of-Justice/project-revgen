@@ -16,14 +16,15 @@ presses one button, says what she wants, and hears a confirmation.
 
 | Path | What it is | State |
 |---|---|---|
-| `backend/` | STT → intent → resolver → MQTT → TTS | **working**, 47 tests |
+| `backend/` | STT → intent → resolver → MQTT → TTS | **working**, 66 tests |
 | `Dockerfile`, `fly.toml` | Deploy config (root, because the image needs `config/`) | ready |
 | `config/commands.json` | IR codes, channels, Malayalam phrases — single source of truth | needs her channel numbers |
-| `firmware/emitter/` | IR blaster by the TV | v1 sketch, serial only; needs MQTT |
-| `firmware/remote/` | The handheld | not started |
+| `firmware/emitter/` | IR blaster by the TV | **written**, MQTT + LWT; untested on hardware |
+| `firmware/remote/` | The handheld | not started (XIAO ESP32S3 + custom PCB) |
 | `archive/v1/` | Superseded v1 code, kept for provenance | — |
-| `docs/` | Pinouts, transmitter spec sheet | — |
+| `docs/` | Pinouts, spec sheet, parts list | — |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Why it is built this way, and what was rejected | — |
+| [`docs/BOM.md`](docs/BOM.md) | Parts to buy, with the specs that actually matter | ~₹8,100 |
 
 ## Start here
 
@@ -31,7 +32,7 @@ presses one button, says what she wants, and hears a confirmation.
 cd backend
 python -m venv .venv && source .venv/bin/activate   # Windows: .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
-pytest                      # 47 tests, no network or hardware needed
+pytest                      # 66 tests, no network or hardware needed
 ```
 
 Then, with a Sarvam key in `backend/.env`:

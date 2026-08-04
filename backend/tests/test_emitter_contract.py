@@ -1,0 +1,139 @@
+"""The Backend -> Emitter wire contract.
+
+The firmware cannot be compiled or run here, so this pins down the exact JSON
+it will receive. Every assertion below corresponds to a line in
+firmware/emitter/emitter.ino::parseSteps -- if one of these fails, the emitter
+will reject the command at runtime with a device nobody is standing next to.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from app.catalog import Catalog
+from app.config import settings
+from app.resolver import State, resolve
+from app.schemas import Action, Device, Intent
+
+PANASONIC_KEYS = {"type", "protocol", "address", "command", "raw", "repeat"}
+
+
+@pytest.fixture
+def catalog() -> Catalog:
+    return Catalog.load(settings.catalog_path)
+
+
+def payload_for(intents, catalog, state=None) -> dict:
+    """Exactly what emitter.py publishes."""
+    plan = resolve(
+        intents, catalog, state or State(), 1000.0,
+        debounce_s=8, max_volume_steps=5, digit_gap_ms=300,
+    )
+    return {"id": plan.id, "steps": [s.model_dump() for s in plan.steps]}
+
+
+def test_payload_has_id_and_steps(catalog):
+    p = payload_for([Intent(device=Device.TV, action=Action.POWER_ON,
+                            confidence="high")], catalog)
+    assert p["id"], "firmware rejects a command with no id"
+    assert isinstance(p["steps"], list) and p["steps"]
+
+
+def test_panasonic_step_shape(catalog):
+    p = payload_for([Intent(device=Device.TV, action=Action.POWER_ON,
+                            confidence="high")], catalog)
+    step = p["steps"][0]
+    assert step["type"] == "ir"
+    assert step["protocol"] == "panasonic"
+    assert isinstance(step["address"], int)
+    assert isinstance(step["command"], int)
+    # firmware casts command to uint8_t and address to uint16_t
+    assert 0 <= step["command"] <= 0xFF
+    assert 0 <= step["address"] <= 0xFFFF
+
+
+def test_nec_raw_step_shape(catalog):
+    p = payload_for([Intent(device=Device.STB, action=Action.CHANNEL_UP,
+                            confidence="high")], catalog)
+    step = p["steps"][0]
+    assert step["protocol"] == "nec_raw"
+    assert isinstance(step["raw"], int)
+    assert 0 <= step["raw"] <= 0xFFFFFFFF, "firmware stores raw in a uint32_t"
+
+
+def test_delay_step_shape_and_ceiling(catalog):
+    p = payload_for(
+        [
+            Intent(device=Device.TV, action=Action.POWER_ON, confidence="high"),
+            Intent(device=Device.TV, action=Action.VOLUME_UP, confidence="high"),
+        ],
+        catalog,
+    )
+    delays = [s for s in p["steps"] if s["type"] == "delay"]
+    assert delays
+    for d in delays:
+        assert isinstance(d["ms"], int)
+        # emitter.ino: MAX_DELAY_MS
+        assert d["ms"] <= 10_000, "firmware refuses the whole sequence"
+
+
+def test_protocols_are_only_the_two_the_firmware_knows(catalog):
+    """Anything else makes parseSteps() return 'unsupported protocol'."""
+    intents = [
+        [Intent(device=Device.TV, action=Action.POWER_ON, confidence="high")],
+        [Intent(device=Device.TV, action=Action.VOLUME_UP, steps=3, confidence="high")],
+        [Intent(device=Device.STB, action=Action.CHANNEL_UP, confidence="high")],
+    ]
+    for group in intents:
+        for step in payload_for(group, catalog)["steps"]:
+            if step["type"] == "ir":
+                assert step["protocol"] in {"panasonic", "nec_raw"}
+
+
+def test_step_count_within_firmware_buffer(catalog):
+    """emitter.ino: MAX_STEPS = 24. Exceeding it rejects the whole command."""
+    p = payload_for(
+        [
+            Intent(device=Device.TV, action=Action.POWER_ON, confidence="high"),
+            Intent(device=Device.TV, action=Action.VOLUME_UP, steps=5, confidence="high"),
+            Intent(device=Device.TV, action=Action.VOLUME_UP, steps=5, confidence="high"),
+        ],
+        catalog,
+    )
+    assert len(p["steps"]) <= 24
+
+
+def test_payload_fits_the_mqtt_buffer(catalog):
+    """PubSubClient is set to 2048 bytes and silently drops anything larger.
+
+    The default is 256, which the longer sequences exceed -- the most common
+    way this integration looks fine and does nothing.
+    """
+    p = payload_for(
+        [
+            Intent(device=Device.TV, action=Action.POWER_ON, confidence="high"),
+            Intent(device=Device.TV, action=Action.VOLUME_UP, steps=5, confidence="high"),
+            Intent(device=Device.TV, action=Action.VOLUME_UP, steps=5, confidence="high"),
+        ],
+        catalog,
+    )
+    encoded = json.dumps(p)
+    assert len(encoded) < 2048, f"payload is {len(encoded)}B, firmware buffer is 2048B"
+
+
+def test_json_is_ascii_safe(catalog):
+    """No Malayalam reaches the emitter -- phrases stay on the backend."""
+    p = payload_for([Intent(device=Device.TV, action=Action.POWER_ON,
+                            confidence="high")], catalog)
+    json.dumps(p).encode("ascii")
+
+
+def test_ack_shape_matches_what_the_backend_parses(catalog):
+    from app.schemas import Ack
+
+    # exactly what emitter.ino::publishAck emits
+    assert Ack.model_validate_json('{"id":"abc","ok":true}').ok
+    bad = Ack.model_validate_json('{"id":"abc","ok":false,"error":"unsupported protocol"}')
+    assert not bad.ok and bad.error == "unsupported protocol"

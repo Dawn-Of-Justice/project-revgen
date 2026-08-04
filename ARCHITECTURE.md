@@ -182,7 +182,36 @@ the TV from a terminal.
 **2 — Backend end to end.** ✅ *Written.* Ends with: a recorded WAV from your
 laptop controls the TV, whole intelligence layer proven, no new hardware.
 
-**3 — Voice unit.** Last on purpose. By now it is the only unknown left. v1
+**3 — Voice unit.** XIAO ESP32S3 (ESP32-S3, 8MB PSRAM, LiPo charging) on a
+custom carrier PCB, in a 3D printed case shaped like a TV remote — roughly
+160 × 60 × 28mm.
+
+A custom board is not indulgence here, it is the robust option. Every joint on a
+PCB is a connection that cannot work loose when the device hits a tiled floor,
+and modules hand-wired into an off-the-shelf box have a dozen that can. The
+printed case earns its keep by being a shape she already recognises: long enough
+not to vanish down the side of a chair, thick enough to hold in the palm rather
+than pinch between fingertips, which is the distinction arthritis makes matter.
+
+PETG or ASA, never PLA — PLA is brittle on impact and creeps in Kerala heat. A
+printed TPU sleeve provides what a commercial enclosure gets from overmoulding:
+grip for unsteady hands, and corner impact absorption.
+
+Weight sits at the bottom so it stands like a torch. The speaker fires out the
+front face, never the back: a speaker pointed into a palm or a lap is a
+confirmation she cannot hear, which defeats the entire latency argument above.
+The microphone goes at the opposite end of the board from the speaker, because
+otherwise it hears the confirmation and there is no software fix for that.
+Charging is a magnetic USB-C tip left in the port permanently, so she never aims
+a connector and the most mechanically fragile part never wears out.
+
+One large button, centred where the thumb lands. Nothing else to press.
+
+Build the board early even though the firmware comes last — two revisions at
+2–3 weeks each is the realistic schedule, and that time runs in parallel with
+everything else.
+
+Last on purpose. By now it is the only unknown left. v1
 failed partly because this was built first, and it is the component with the
 least observable failure modes.
 
