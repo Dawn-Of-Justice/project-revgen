@@ -45,13 +45,21 @@ primary_region = "bom"   # Mumbai: closest region to Kerala. Every 100ms of
     timeout = "5s"
 
 # Persists the TTS cache and the utterance log across deploys. Without it every
-# deploy would regenerate ~20 phrases against the bulbul:v3 rate limit and lose
-# the log you need to debug her problems remotely.
+# deploy regenerates ~20 phrases against the bulbul:v3 rate limit and throws
+# away the log you need to debug her problems from a distance.
+#
+# COMMENTED OUT FOR THE FIRST DEPLOY. A volume cannot be created until the app
+# exists, so a mount pointing at a volume that is not there fails the deploy
+# with "volume 'revgen_data' not found". After the first successful deploy:
 #
 #   fly volumes create revgen_data --region bom --size 1
-[[mounts]]
-  source = "revgen_data"
-  destination = "/data"
+#
+# then uncomment and `fly deploy` again. Until then /data is container-local:
+# the service works, but the cache and log are wiped on every deploy.
+#
+# [[mounts]]
+#   source = "revgen_data"
+#   destination = "/data"
 
 [[vm]]
   size = "shared-cpu-1x"
