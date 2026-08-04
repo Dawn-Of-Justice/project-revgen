@@ -67,7 +67,8 @@ backend-to-broker hop then costs nothing and only the emitter's link to Mumbai
    redoing this, not reflashing.
 3. Watch the serial monitor at **115200**.
 
-Status LED (GPIO2):
+Status LED — GPIO2 on a classic ESP32, GPIO8 (active low) on a C3. Selected
+automatically by `#if CONFIG_IDF_TARGET_ESP32C3`.
 
 | Pattern | Meaning |
 |---|---|
@@ -76,16 +77,27 @@ Status LED (GPIO2):
 | Three quick flashes | Connected |
 | Solid while firing | Executing a sequence |
 
-## Test without the backend
+On a C3, enable **USB CDC On Boot** in the IDE or there is no serial output.
+
+## Testing
+
+The simplest check is to send a real command from the deployed backend and
+watch the board react:
 
 ```bash
-mosquitto_pub -h <broker> -p 8883 --capath /etc/ssl/certs -u revgen -P '<pass>' \
-  -t revgen/emitter/cmd \
-  -m '{"id":"test-1","steps":[{"type":"ir","protocol":"panasonic","address":8,"command":61,"repeat":0}]}'
+cd ../../backend
+python tools/send_wav.py recordings/01_tv_on__power_on.m4a https://project-revgen.fly.dev/command
 ```
 
-That's TV power. Subscribe to `revgen/emitter/ack` in another terminal to see
-the acknowledgement, and `revgen/emitter/status` for online/offline.
+To publish a command by hand without the backend, use the Python stand-in
+rather than installing Mosquitto — `backend/tools/fake_emitter.py` shows the
+message format, and it reads credentials from `backend/.env`. It is also how
+the wire protocol was verified before any hardware existed: it enforces the
+same step count, delay ceiling and protocol whitelist as `parseSteps()` here,
+so if it accepts a command this firmware will too.
+
+Topics worth watching: `revgen/emitter/ack` for acknowledgements,
+`revgen/emitter/status` for online/offline.
 
 ## Two things worth knowing
 

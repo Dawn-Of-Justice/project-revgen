@@ -33,7 +33,13 @@ built independently and in any order:
 | Backend → Emitter | command sequence on `revgen/emitter/cmd`, `Ack` on `.../ack` |
 
 Both are testable without the other side: `curl` a WAV at the backend,
-`mosquitto_pub` at the emitter.
+`backend/tools/fake_emitter.py` at the broker in place of the hardware.
+
+That last one matters more than it sounds. `fake_emitter.py` enforces the same
+validation rules as the firmware — step count, delay ceiling, protocol
+whitelist, refuse-the-whole-sequence-on-error — so it is a live check on the
+wire contract rather than a passive viewer. Phase 2 was signed off against it
+before any hardware existed.
 
 **Roughly 80% of the complexity lives in the backend on purpose.** v1 stalled
 because its smartest component was a microcontroller in someone else's house.
