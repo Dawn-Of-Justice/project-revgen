@@ -16,9 +16,12 @@ Two decisions worth knowing about:
 from __future__ import annotations
 
 import json
+import logging
 
 import httpx
 from pydantic import ValidationError
+
+log = logging.getLogger(__name__)
 
 from .catalog import Catalog
 from .config import settings
@@ -31,9 +34,10 @@ ACTION_SCHEMA = {
                     "type": "string",
                     "enum": ["tv", "stb"],
                     "description": (
-                        "tv = the television. stb = the set-top box, which the "
-                        "household may call the modem, the box, Asianet, or "
-                        "ബോക്സ്. Omit only if truly unclear."
+                        "Always set this. tv = the television. stb = the "
+                        "set-top box, which the household may call the modem, "
+                        "the box, Asianet, or ബോക്സ്. If she did not name a "
+                        "device: volume is tv, channel is stb."
                     ),
                 },
                 "action": {
@@ -65,7 +69,12 @@ ACTION_SCHEMA = {
                     ),
                 },
     },
-    "required": ["action", "confidence"],
+    # `device` is required on purpose. Left optional, the model omits it even
+    # when she plainly said "TV" -- and the resolver has no safe default for
+    # power (she could mean either box), so it refuses and she hears "I didn't
+    # understand" for a perfectly clear request. Forcing the field makes the
+    # model commit, and the prompt tells it how to break ties.
+    "required": ["device", "action", "confidence"],
 }
 
 TOOL = {
@@ -105,8 +114,8 @@ Rules:
 - One utterance often contains more than one request. "TV ഓണാക്കുവോ... and sound-ഉം കൂടെ കൂട്ടണേ കുറച്ച്" is two actions: power_on for the tv, then volume_up with steps 2. Return them in the order she said them.
 - Politeness, hesitation and filler are normal speech, not uncertainty. "ഓണാക്കുവോ?", "ഉം", "മോനേ" and similar are still clear requests -- keep confidence high.
 - Softeners map to step counts: "കുറച്ച്" (a little) is 2, plain "കൂട്ടൂ" is 1, "ഒരുപാട്" (a lot) is 4.
-- She names the device most of the time. If she says "modem", "box", "ബോക്സ്" or a channel name, that is the set-top box (stb).
-- Volume without a named device is the TV.
+- Always fill in `device`, on every action. If she says "TV" or "ടിവി" it is tv. If she says "modem", "box", "ബോക്സ്" or a channel name it is stb. When she names a device once and then asks for something else in the same breath, that device still applies -- "TV ഓണാക്കുവോ... and sound-ഉം കൂട്ടണേ" is tv for both actions.
+- If she genuinely named no device: volume is tv, channel is stb.
 - If the utterance is not a request to control the TV or box -- ordinary conversation, someone else talking, audio from the television itself -- return a single action "unknown" with confidence "low". This matters: the microphone sits in a room with a loud TV, so refusing is the common correct answer.
 - Never invent a channel that is not listed.
 - Prefer confidence "low" when unsure. A wrong command is worse than no command, because she has no way to undo one."""
@@ -126,16 +135,23 @@ async def extract(transcript: str, catalog: Catalog) -> list[Intent]:
     payload: dict = {
         "model": settings.chat_model,
         "temperature": 0.1,
-        "max_tokens": 200,
+        # Generous: reasoning tokens (if enabled) are drawn from this budget
+        # too, and running out produces an empty response with no tool call
+        # rather than an error.
+        "max_tokens": 1024,
         "messages": [
             {"role": "system", "content": build_system_prompt(catalog)},
             {"role": "user", "content": transcript},
         ],
         "tools": [TOOL],
         "tool_choice": {"type": "function", "function": {"name": "control_devices"}},
+        # ALWAYS sent, including as an explicit null. Sarvam defaults this to
+        # "medium", and the docs say it is disabled only by setting it to None
+        # -- omitting the key leaves reasoning switched on. That cost us an
+        # empty response with no tool call, which looked exactly like the model
+        # failing to understand her.
+        "reasoning_effort": settings.chat_reasoning_effort,
     }
-    if settings.chat_reasoning_effort:
-        payload["reasoning_effort"] = settings.chat_reasoning_effort
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
@@ -164,27 +180,50 @@ def _parse(body: dict) -> list[Intent]:
     an action that fails validation is discarded and the resolver refuses.
     """
     try:
-        calls = body["choices"][0]["message"].get("tool_calls") or []
+        choice = body["choices"][0]
+        message = choice["message"]
+        calls = message.get("tool_calls") or []
         if not calls:
-            return [Intent()]  # unknown / low -- resolver will refuse
+            # No tool call despite tool_choice being forced. finish_reason and
+            # usage are the two things that distinguish the causes:
+            #   "length" + large completion_tokens -> ran out of budget, very
+            #     likely reasoning tokens (see reasoning_effort above)
+            #   "stop" + prose in content          -> model ignored tool_choice
+            log.warning(
+                "no tool_call: finish_reason=%s usage=%s reasoning=%r content=%r",
+                choice.get("finish_reason"),
+                body.get("usage"),
+                (message.get("reasoning_content") or "")[:120],
+                (message.get("content") or "")[:200],
+            )
+            return [Intent()]
         args = json.loads(calls[0]["function"]["arguments"])
-    except (KeyError, IndexError, json.JSONDecodeError, TypeError):
+    except (KeyError, IndexError, json.JSONDecodeError, TypeError) as exc:
+        log.warning("unparseable tool_call (%s): %s", exc, str(body)[:300])
         return [Intent()]
 
     raw = args.get("actions")
     if isinstance(args, dict) and raw is None and "action" in args:
         raw = [args]          # tolerate a bare single action
     if not isinstance(raw, list):
+        log.warning("tool_call had no actions array: %s", str(args)[:300])
         return [Intent()]
 
     intents: list[Intent] = []
     for item in raw:
         try:
             intents.append(Intent.model_validate(item))
-        except ValidationError:
-            continue
+        except ValidationError as exc:
+            # Still discarded rather than repaired -- a guessed command is worse
+            # than none -- but no longer silently. Without this line an
+            # out-of-enum confidence value looks identical to a refusal.
+            log.warning("dropped invalid action %s: %s", item, exc.errors()[:2])
 
-    return intents or [Intent()]
+    if not intents:
+        return [Intent()]
+
+    log.info("intents: %s", [(i.action.value, i.device, i.confidence) for i in intents])
+    return intents
 
 
 def _offline_intent(transcript: str) -> list[Intent]:
