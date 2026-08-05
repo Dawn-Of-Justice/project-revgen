@@ -54,6 +54,7 @@ Two blockers, both waiting on parts:
 | `docs/` | Pinouts, spec sheet, parts list | — |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Why it is built this way, and what was rejected | — |
 | [`docs/BOM.md`](docs/BOM.md) | Parts, with the specs that actually matter | ₹355 outstanding |
+| [`docs/WIRING.md`](docs/WIRING.md) | Pin assignment, breadboard wiring, bring-up order | — |
 
 ## Start here
 
