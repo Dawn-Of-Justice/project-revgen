@@ -1,0 +1,76 @@
+{
+  "_about": "Machine-checkable netlist for the handheld carrier board. Draw the schematic in Fusion Electronics by hand, then this is diffed against what you actually drew, net by net. Prose version with reasoning: docs/PCB.md",
+
+  "_check": "Every connection below must exist in the schematic, and no net may have members that are not listed here. Extra connections are as much a bug as missing ones.",
+
+  "parts": {
+    "U1": { "part": "XIAO ESP32S3",     "note": "module, soldered flat, no headers" },
+    "U2": { "part": "INMP441 module",   "note": "place at the OPPOSITE end from U3" },
+    "U3": { "part": "MAX98357A module", "note": "class-D amp" },
+    "SW1": { "part": "Tactile 12mm",    "note": "pick by feel before routing" },
+    "SW2": { "part": "SPDT slide",      "note": "internal battery isolation, not for her" },
+    "J1": { "part": "JST-PH 2.0 2-pin", "note": "battery, 803040 LiPo" },
+    "J2": { "part": "JST-PH 2.0 2-pin", "note": "speaker" },
+    "C1": { "part": "10uF 0805",  "note": "U2 bulk" },
+    "C2": { "part": "100nF 0805", "note": "U2 decoupling" },
+    "C3": { "part": "10uF 0805",  "note": "U3 bulk" },
+    "C4": { "part": "100nF 0805", "note": "U3 decoupling" },
+    "C5": { "part": "220uF elec", "note": "amp supply bulk - the one people skip" },
+    "R1": { "part": "100k 0805",  "note": "OPTIONAL: GAIN to GND via 100k = 15dB instead of 12dB. Fit the footprint, decide after hearing it in the case." }
+  },
+
+  "nets": {
+    "BAT+": {
+      "members": ["J1.1", "SW2.COMMON"],
+      "note": "raw cell, 3.7-4.2V"
+    },
+    "VBAT_SW": {
+      "members": ["SW2.OUT", "U1.B+", "U3.VIN", "C3.1", "C4.1", "C5.+"],
+      "note": "U3.VIN on battery, NOT 3V3 and NOT 5V. The 5V pin is dead on battery; 3V3 costs ~2.3dB of output."
+    },
+    "3V3": {
+      "members": ["U1.3V3", "U2.VDD", "C1.1", "C2.1"]
+    },
+    "GND": {
+      "members": ["J1.2", "U1.GND", "U1.B-", "U2.GND", "U2.L/R", "U3.GND",
+                  "U3.GAIN", "SW1.2", "C1.2", "C2.2", "C3.2", "C4.2", "C5.-"],
+      "note": "U2.L/R to GND selects the left channel, which is what the firmware reads. Floating = silence that looks like a dead mic. U3.GAIN to GND = 12dB."
+    },
+
+    "I2S_MIC_SCK": { "members": ["U1.D8",  "U2.SCK"], "gpio": 7 },
+    "I2S_MIC_WS":  { "members": ["U1.D9",  "U2.WS"],  "gpio": 8 },
+    "I2S_MIC_SD":  { "members": ["U1.D10", "U2.SD"],  "gpio": 9 },
+
+    "I2S_AMP_BCLK": { "members": ["U1.D0", "U3.BCLK"], "gpio": 1 },
+    "I2S_AMP_LRC":  { "members": ["U1.D1", "U3.LRC"],  "gpio": 2 },
+    "I2S_AMP_DIN":  { "members": ["U1.D2", "U3.DIN"],  "gpio": 3 },
+
+    "BUTTON": {
+      "members": ["U1.D3", "SW1.1"],
+      "gpio": 4,
+      "note": "INPUT_PULLUP, other side to GND. Must stay an RTC-capable pin or deep-sleep wake breaks."
+    },
+    "AMP_SD": {
+      "members": ["U1.D4", "U3.SD"],
+      "gpio": 5,
+      "note": "The battery-life pin. Amp draws 2.4mA when enabled -- 35x the rest of the sleeping device."
+    },
+
+    "SPK+": { "members": ["U3.+", "J2.1"] },
+    "SPK-": { "members": ["U3.-", "J2.2"], "note": "bridged output: neither side to GND, ever" }
+  },
+
+  "unused_pins": {
+    "U1.D5": "GPIO6  - free",
+    "U1.D6": "GPIO43 - UART TX, leave clear for serial debugging",
+    "U1.D7": "GPIO44 - UART RX, leave clear for serial debugging",
+    "U1.5V": "not connected: only live on USB, useless on battery"
+  },
+
+  "firmware_pins": {
+    "_note": "Must match firmware/remote/remote.ino. Change both together or nothing works and it looks like a hardware fault.",
+    "MIC_SCK": 7, "MIC_WS": 8, "MIC_SD": 9,
+    "AMP_BCLK": 1, "AMP_LRC": 2, "AMP_DIN": 3,
+    "BUTTON_PIN": 4, "AMP_SD_PIN": 5, "LED_PIN": 21
+  }
+}

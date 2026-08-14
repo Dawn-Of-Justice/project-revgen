@@ -61,6 +61,7 @@ Two blockers, both waiting on parts:
 | [`docs/BOM.md`](docs/BOM.md) | Parts, with the specs that actually matter | ₹355 outstanding |
 | [`docs/WIRING.md`](docs/WIRING.md) | Pin assignment, breadboard wiring, bring-up order | — |
 | [`docs/PCB.md`](docs/PCB.md) | Carrier board: netlist, footprints, layout rules | ready to draw |
+| [`docs/netlist.json`](docs/netlist.json) | Same netlist, machine-checkable against the schematic | 14 nets, 45 connections |
 
 ## Start here
 
