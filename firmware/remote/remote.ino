@@ -302,7 +302,17 @@ static void beep(int freq, int ms, float volume = BEEP_VOLUME) {
 }
 
 static void beepListening() { beep(880, 90); }
-static void beepHeard()     { beep(1320, 70); }
+
+/*
+ * Deliberately quieter and shorter than the others: a tick, not an
+ * announcement.
+ *
+ * Its only job is to mark the boundary between "listening" and "working on it",
+ * so the ten-second wait that follows does not feel like nothing happened. She
+ * already knows she let go of the button, so it does not need to be loud enough
+ * to compete with the confirmation that follows.
+ */
+static void beepHeard()     { beep(1320, 40, 0.30f); }
 static void beepFailed()    { beep(400, 140); delay(60); beep(300, 200); }
 // Distinct from the others: two rising notes, heard only on a cold boot.
 static void beepArmed()     { beep(660, 70); delay(50); beep(990, 110); }
