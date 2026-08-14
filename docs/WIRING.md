@@ -18,13 +18,33 @@ in the sketch together, or nothing works and it looks like a hardware fault.
 
 ### IR driver
 
+The 2N2222A has exactly three legs, and all three are used: base from the GPIO,
+collector to the LEDs, emitter to ground.
+
 ```
-GPIO4 ──[1k]── B
-                    2N2222A          ┌─[100R]── IR LED ──┐
-               C ──────────────────┤ ├─[100R]── IR LED ──┤
-                                     ├─[100R]── IR LED ──┼── 5V
-               E ── GND              └─[100R]── IR LED ──┘
+                          5V
+                           │
+          ┌────────┬───────┴───────┬────────┐
+        [100R]   [100R]         [100R]   [100R]
+          │        │               │        │
+         LED      LED             LED      LED       (940nm, cathode down)
+          │        │               │        │
+          └────────┴───────┬───────┴────────┘
+                           │
+                     COLLECTOR (C)
+                           │
+GPIO4 ──[1k]──── BASE (B) ─┤  2N2222A
+                           │
+                      EMITTER (E)
+                           │
+                          GND
 ```
+
+The transistor is just a switch. GPIO4 drives the base through the 1kΩ; that
+turns the transistor on, which connects the LED cathodes to ground and lights
+them. The ESP32 pin only ever carries ~2.6mA — the 140mA for the LEDs comes from
+the 5V rail through the collector, which is the entire reason for the transistor.
+A GPIO cannot source that directly.
 
 **One resistor per LED.** LEDs do not current-share — a single shared resistor
 leaves one doing nearly all the work while the others barely light.
@@ -74,6 +94,15 @@ goes in the code.
 | Button | D3 | **4** | button → GND, `INPUT_PULLUP` |
 | Status LED | — | **21** | onboard, active low |
 
+**Plus power and ground to both modules** — those are not GPIO so they are not
+in the table above, and forgetting them is an easy way to spend an evening
+debugging a module that was never switched on:
+
+| | INMP441 | MAX98357A |
+|---|---|---|
+| Power | 3V3 | 5V on the breadboard, **BAT+** once on battery |
+| Ground | GND | GND |
+
 The ESP32-S3 has two I2S peripherals, so the microphone runs on `I2S_NUM_0` and
 the amplifier on `I2S_NUM_1` — no reconfiguring between record and playback.
 (This is one of the reasons a C3 could not do this job.)
@@ -94,19 +123,22 @@ exactly like a dead microphone.
 
 | Pin | to |
 |---|---|
-| VIN | **BAT+**, not 3V3 — see below |
+| VIN | **5V** while breadboarding; **BAT+** in the final build — see below |
 | GND | GND |
 | BCLK / LRC / DIN | GPIO1 / 2 / 3 |
 | GAIN | leave floating for 9dB; tie to GND for 12dB |
 | SD | leave alone — the breakout pulls it up. Pulling it low mutes the amp. |
 | + / − | speaker |
 
-**Power it from the battery, not the 3V3 rail.** XIAO's 5V pin is only live on
-USB, so on battery the amp would fall back to 3.3V and get noticeably quieter.
+**On the breadboard, use the 5V pin.** It is live whenever USB is plugged in,
+and there is no battery yet, so BAT+ is dead.
+
+**In the final build, move it to BAT+ — not 3V3.** XIAO's 5V pin goes dead on
+battery power, so the amp would fall back to 3.3V and get noticeably quieter.
 Wired to BAT+ it sees 3.7–4.2V, which matters because she is hard of hearing and
 a confirmation she cannot hear is the same as no confirmation. The MAX98357A
-accepts 2.5–5.5V and has good supply rejection, so the varying battery voltage
-is fine.
+accepts 2.5–5.5V with good supply rejection, so the sagging battery voltage is
+fine.
 
 If it is still too quiet, tie GAIN to GND before reaching for a bigger speaker.
 
@@ -124,11 +156,13 @@ debugging this.
 Test each piece alone. Wiring everything then powering on gives you no idea
 which of six things is wrong.
 
-1. **Blink.** Confirms the board, the IDE settings and your USB cable. On a C3
-   enable **USB CDC On Boot** or there is no serial output at all.
-2. **WiFi scan.** Already done on the C3 at -39 dBm. Re-run it from where the
-   emitter will actually sit — behind a cabinet is a different number, and
-   anything worse than about -70 dBm means intermittent MQTT drops later.
+1. **`firmware/selftest`.** USB only, no wiring. Confirms the board, the IDE
+   settings, the PSRAM (including a real 192KB allocation) and surveys WiFi.
+   Enable **USB CDC On Boot**, and on a XIAO set **Tools > PSRAM = OPI PSRAM**
+   or a board that has 8MB reports zero.
+2. **Re-run the scan from where the device will actually sit.** Behind a
+   cabinet is a different number from your desk, and anything worse than about
+   -70 dBm means intermittent MQTT drops later.
 3. **TSOP alone**, with `firmware/capture`. Press any remote and watch codes
    appear. This is Phase 0 and needs nothing else.
 4. **IR LED alone.** Fire one code at the TV. A phone camera sees IR — point it

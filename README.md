@@ -22,7 +22,7 @@ the filler and the polite interrogative ending on the first attempt.
 | **0 — does it understand her?** | ✅ | Saaras + Sarvam-105B resolve her speech to the right two actions |
 | **1 — emitter** | firmware written, protocol verified | needs hardware to flash |
 | **2 — backend** | ✅ deployed | `project-revgen.fly.dev`, verified end to end in ~3.9s |
-| **3 — handheld** | not started | XIAO ESP32S3 on a custom PCB |
+| **3 — handheld** | firmware written | XIAO ESP32S3 verified: 8MB PSRAM, 192KB buffer OK |
 | **4 — harden** | not started | enclosure, battery, undo, watchdogs |
 
 The emitter firmware is validated against `backend/tools/fake_emitter.py`, which
@@ -47,9 +47,10 @@ Two blockers, both waiting on parts:
 | `backend/` | STT → intent → resolver → MQTT → TTS | **deployed**, 66 tests |
 | `Dockerfile`, `fly.toml` | Deploy config, at the root because the image needs `config/` | live |
 | `config/commands.json` | IR codes, channels, Malayalam phrases — single source of truth | needs her channel numbers |
+| `firmware/selftest/` | Flash to any new board first: PSRAM, flash, WiFi survey | written |
 | `firmware/capture/` | Phase 0 rig: recapture IR codes, sweep for discrete ones | written, untested on hardware |
 | `firmware/emitter/` | IR blaster by the TV | written, untested on hardware |
-| `firmware/remote/` | The handheld | not started |
+| `firmware/remote/` | The handheld | written, uncompiled |
 | `archive/v1/` | Superseded v1 code, kept for provenance | — |
 | `docs/` | Pinouts, spec sheet, parts list | — |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Why it is built this way, and what was rejected | — |
