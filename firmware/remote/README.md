@@ -72,17 +72,113 @@ back off. The beeps are the fix for the worst failure mode in the system. The
 failure. **Every failure path makes a sound** — silence is indistinguishable
 from a dead device, and that is when she stops using it.
 
-## Recording stops when she has finished
+## Push to talk
 
-Whichever is latest: 1.2s of silence, or the button released. Minimum 0.7s,
-hard cap 8s.
+**Hold the button, speak, let go.** Recording starts the instant it wakes —
+there is no second press, and it does not wait for the network first. A 300ms
+tail after release catches the last syllable, which people clip constantly by
+letting go as they finish the word.
 
-That tolerates both mental models. Holding it like a walkie-talkie works; so
-does tapping and then speaking. She will use whichever feels natural without
-being told which is correct.
+If the button is already up by the time recording starts — a quick tap, which
+is what a short press looks like after ~300ms of boot — it falls back to
+stopping on 1.2s of silence, so tap-and-speak still works.
 
-The cap matters commercially as well as practically — Saaras is billed per
-second of audio, and upload time dominates the round trip.
+Hard cap 6s either way. A stuck button should not upload six seconds of an
+empty room repeatedly: Saaras is billed per second, and upload dominates the
+round trip.
+
+There is deliberately **no check that the button is still held at boot**. An
+earlier version dismissed any press shorter than the ~300ms boot time as
+spurious, which meant every normal press had to be made twice. The floating-pin
+problem that check was guarding against is fixed properly at the source, by the
+RTC pullup in `sleepNow()`.
+
+## A second press cancels and starts over
+
+Upload, download and playback together take about ten seconds. Locking her out
+for all of it after a misspoken command is the kind of thing that makes a
+device feel broken, so pressing the button again abandons the current attempt
+and starts a fresh recording.
+
+Every stage of the wait is interruptible, by one of two mechanisms:
+
+| Stage | How |
+|---|---|
+| Upload (~7s) | button interrupt → `esp_restart()` |
+| Download (~5s) | polled between reads |
+| Playback (~3.5s) | polled between 2KB chunks |
+
+**The upload reboots the device**, which sounds drastic and is the simplest
+correct answer. `HTTPClient::POST` blocks for the entire request with no
+callback to poll from — and it is the longest stage, so leaving it unresponsive
+means most of the wait ignores her. Moving the network to its own FreeRTOS task
+would work but brings shared state, teardown and a half-open TLS session to
+clean up.
+
+Nothing is worth preserving mid-upload: the recording is being abandoned by
+definition, and the WiFi cache lives in RTC memory which survives a restart.
+Boot back to a microphone is ~300ms, faster than the wait it replaces. An RTC
+flag tells the next boot to skip straight to recording.
+
+The interrupt is armed only around the blocking call, so playback keeps the
+graceful chunked cancel rather than rebooting.
+
+**Cancelling cannot un-fire IR.** If the backend already published to the
+emitter, the television has already reacted — this skips the *wait*, not the
+action. The backend's 8-second power debounce is what stops the resulting
+second command undoing the first.
+
+Detection is edge-triggered: the press that *ends* the recording is still
+physically down when the upload begins, and would otherwise cancel itself
+immediately. `armCancel()` requires the button to be seen released first.
+
+## WiFi connects while she talks
+
+The radio is kicked off *before* recording and waited on afterwards, so roughly
+400ms of association disappears underneath two seconds of speech instead of
+preceding it.
+
+The channel, BSSID and leased IP are cached in RTC memory, which survives deep
+sleep. That skips the all-channel scan and DHCP — about 1300ms down to under
+400ms. It is only ever a cache: a moved router or an expired lease fails, falls
+back to the full path, and refreshes itself. Three consecutive failures and the
+cache is discarded.
+
+## Loudness
+
+She is hard of hearing, and a confirmation she cannot hear is the same as no
+confirmation. Three independent levers, worth using all of them:
+
+**Software — `BEEP_VOLUME` (0.85)** for the local tones, as a fraction of full
+scale.
+
+**Software — the spoken reply is normalised**, not scaled by a fixed amount.
+Each clip is scanned for its loudest sample and lifted so that peak lands at
+`PLAYBACK_PEAK`. Bulbul does not guarantee a consistent level between phrases,
+so a fixed multiplier would either clip the loud ones or leave the quiet ones
+inaudible. `MAX_NORMALISE_GAIN` caps it at 8x so a near-silent clip is not
+amplified into hiss. The serial log prints `peak N -> gain N.NNx` so you can see
+what each reply needed.
+
+**Hardware — the MAX98357A `GAIN` pin**, which is free volume:
+
+| GAIN connected to | Gain |
+|---|---|
+| VDD through 100kΩ | 3 dB |
+| VDD | 6 dB |
+| floating | 9 dB (default) |
+| GND | 12 dB |
+| GND through 100kΩ | **15 dB** |
+
+Floating gives 9dB. A plain wire to GND gets you 12dB for nothing; 100kΩ to GND
+gets 15dB and is the loudest the chip offers.
+
+**Hardware — the speaker itself.** A 2W 40mm driver in a sealed printed
+enclosure with a small port is dramatically louder than a bare driver flapping
+on a breadboard. Do not judge final volume until it is mounted in the case.
+
+If it is still not enough after all four, the honest answer is a bigger speaker
+rather than more gain — past this point you are adding distortion, not volume.
 
 ## Microphone gain
 
@@ -106,7 +202,47 @@ was built so problems can be fixed without a car journey — the utterance log,
 the WiFi captive portal, the cloud backend — and firmware is no exception. Once
 this is soldered into a case, OTA is the only way in.
 
-Upload target appears in the Arduino IDE as `revgen-remote` under network ports.
+### Uploading over WiFi
+
+The Arduino IDE is supposed to show `revgen-remote` under **Network ports**, but
+its mDNS discovery is unreliable on Windows even with the firewall opened. Skip
+it and address the device directly:
+
+```powershell
+# Arduino IDE: Sketch > Export Compiled Binary  (Ctrl+Alt+S)
+cd firmware\remote
+.\ota_upload.ps1 -Ip 192.168.0.188 -Password <OTA_PASSWORD>
+```
+
+The script finds `espota` and the freshest `.bin` on its own, warns if the
+binary is stale, and translates the usual failures.
+
+If you do want discovery to work, it needs the network profile set to Private
+plus inbound rules for UDP 5353, the IDE, and espota — all under the Private
+profile. Even then it is flaky. The direct path always works.
+
+## Reflashing over USB
+
+Deep sleep powers down the XIAO's USB peripheral, so the COM port disappears
+and the IDE has nothing to upload to.
+
+**The firmware handles this itself now.** On a cold boot with a host holding
+the serial port open, it stays awake for 15 seconds with the LED blinking fast
+— plenty to hit Upload. On battery in her living room nothing has the port
+open, so it sleeps immediately as intended.
+
+Press RESET, then Upload while it is blinking.
+
+**If it is already asleep**, force ROM download mode. The firmware does not run
+at all in that state, so nothing can put it back to sleep:
+
+1. Hold **B** (BOOT)
+2. Press and release **R** (RESET)
+3. Keep holding **B** another second, then release
+
+Confirm it worked by the serial monitor showing *nothing* — no boot messages.
+The COM port often changes number, so re-select it in Tools → Port before
+uploading.
 
 ## Not yet compiled or run on hardware
 

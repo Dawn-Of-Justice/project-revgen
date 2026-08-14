@@ -107,9 +107,9 @@ async def _synthesise(text: str) -> bytes:
                     "model": settings.tts_model,
                     "speaker": settings.tts_speaker,
                     "pace": settings.tts_pace,
-                    # 16 kHz is plenty for a small speaker and keeps the file
-                    # small enough to stream to an ESP32 without buffering pain.
-                    "speech_sample_rate": "16000",
+                    # Sample rate is an intelligibility decision, not a size
+                    # one. See settings.tts_sample_rate.
+                    "speech_sample_rate": settings.tts_sample_rate,
                     "output_audio_codec": "wav",
                 },
             )

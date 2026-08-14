@@ -19,3 +19,4 @@ backend/cache/
 backend/logs/
 recordings/
 reply.wav
+firmware/**/build/

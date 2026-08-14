@@ -26,6 +26,19 @@ class Settings(BaseSettings):
     tts_speaker: str = "kavitha"
     tts_pace: float = 0.9              # slightly slow: the listener is elderly
 
+    # 24kHz, not 16kHz.
+    #
+    # This was originally 16kHz to keep the download small, which was the wrong
+    # trade. Halving the sample rate halves the audio bandwidth to 8kHz, and the
+    # consonants that carry intelligibility -- s, sh, th -- live above that.
+    # Losing them makes speech sound muffled, and a hard-of-hearing listener is
+    # exactly who cannot afford it.
+    #
+    # Costs roughly 1.5x the bytes, so ~2s more on the download. Worth it: she
+    # has to understand the confirmation, and the local beep already answers the
+    # only time-critical question ("did it hear me?").
+    tts_sample_rate: str = "24000"
+
     # --- MQTT -----------------------------------------------------------
     mqtt_host: str = "localhost"
     mqtt_port: int = 1883

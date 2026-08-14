@@ -22,13 +22,16 @@ the filler and the polite interrogative ending on the first attempt.
 | **0 — does it understand her?** | ✅ | Saaras + Sarvam-105B resolve her speech to the right two actions |
 | **1 — emitter** | firmware written, protocol verified | needs hardware to flash |
 | **2 — backend** | ✅ deployed | `project-revgen.fly.dev`, verified end to end in ~3.9s |
-| **3 — handheld** | firmware written | XIAO ESP32S3 verified: 8MB PSRAM, 192KB buffer OK |
+| **3 — handheld** | ✅ **working** | press, speak, understood, spoken reply. OTA updatable. |
 | **4 — harden** | not started | enclosure, battery, undo, watchdogs |
 
+The handheld works on real hardware: one press, hold to talk, release, and the
+backend returns the right IR plan with a spoken Malayalam confirmation. It
+updates over WiFi, so it stays fixable once it is sealed in a case.
+
 The emitter firmware is validated against `backend/tools/fake_emitter.py`, which
-impersonates it over the real broker using the same validation rules. So the
-whole chain — her voice to IR instructions to a spoken Malayalam reply — already
-works; the only untested part is whether a physical LED flashes.
+impersonates it over the real broker using the same validation rules. The only
+untested part of the whole system is whether a physical IR LED flashes.
 
 Two blockers, both waiting on parts:
 
@@ -47,10 +50,11 @@ Two blockers, both waiting on parts:
 | `backend/` | STT → intent → resolver → MQTT → TTS | **deployed**, 66 tests |
 | `Dockerfile`, `fly.toml` | Deploy config, at the root because the image needs `config/` | live |
 | `config/commands.json` | IR codes, channels, Malayalam phrases — single source of truth | needs her channel numbers |
-| `firmware/selftest/` | Flash to any new board first: PSRAM, flash, WiFi survey | written |
+| `firmware/selftest/` | Flash to any new board first: PSRAM, flash, WiFi survey | verified |
+| `firmware/audiotest/` | Speaker bring-up: tones only, no network | verified |
 | `firmware/capture/` | Phase 0 rig: recapture IR codes, sweep for discrete ones | written, untested on hardware |
 | `firmware/emitter/` | IR blaster by the TV | written, untested on hardware |
-| `firmware/remote/` | The handheld | written, uncompiled |
+| `firmware/remote/` | The handheld | **working on hardware** |
 | `archive/v1/` | Superseded v1 code, kept for provenance | — |
 | `docs/` | Pinouts, spec sheet, parts list | — |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Why it is built this way, and what was rejected | — |

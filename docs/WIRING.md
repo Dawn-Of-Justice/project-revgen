@@ -127,8 +127,18 @@ exactly like a dead microphone.
 | GND | GND |
 | BCLK / LRC / DIN | GPIO1 / 2 / 3 |
 | GAIN | leave floating for 9dB; tie to GND for 12dB |
-| SD | leave alone — the breakout pulls it up. Pulling it low mutes the amp. |
-| + / − | speaker |
+| **SD** | **tie to 3V3** — see below |
+| + / − | speaker (both to the amp, neither to GND) |
+
+**SD is the single most common cause of a silent MAX98357A.** It is not an
+optional shutdown line you can ignore: `SD_MODE` selects the output mode *by
+voltage*, and anything below about 1.4V mutes the amplifier entirely. Some
+breakouts include a pull-up so a floating pin works; plenty of cheap ones do
+not, and those sit silently in shutdown forever while everything else looks
+correct.
+
+Tie it to 3V3 and the ambiguity disappears. `firmware/audiotest` proves it
+either way by toggling SD between two identical tones.
 
 **On the breadboard, use the 5V pin.** It is live whenever USB is plugged in,
 and there is no battery yet, so BAT+ is dead.
