@@ -66,6 +66,19 @@
 #define BUTTON_PIN   4     // to GND, INPUT_PULLUP. RTC-capable, so it can wake us.
 #define LED_PIN      21    // onboard, active low
 
+/*
+ * MAX98357A SD_MODE, and the single most important pin for battery life.
+ *
+ * Left enabled the amplifier draws ~2.4mA continuously -- about 35x everything
+ * else in the sleeping device combined, and the thing that actually decides how
+ * often she has to charge it. Driving it low before deep sleep takes standby
+ * from ~2.5mA to ~0.07mA: roughly 12 days to 37 on a 1000mAh cell.
+ *
+ * Set to -1 if SD is hard-wired to 3V3 (breadboard). On the PCB, give it a
+ * GPIO.
+ */
+#define AMP_SD_PIN   5     // -1 = not controllable
+
 #define I2S_MIC      I2S_NUM_0
 #define I2S_AMP      I2S_NUM_1
 
@@ -241,8 +254,16 @@ static void watchButtonDuringUpload(bool on) {
 static bool micUp = false;
 static bool ampUp = false;
 
+static void ampEnable(bool on) {
+  if (AMP_SD_PIN < 0) return;              // hard-wired high, nothing to do
+  pinMode(AMP_SD_PIN, OUTPUT);
+  digitalWrite(AMP_SD_PIN, on ? HIGH : LOW);
+  if (on) delay(10);                       // let it come out of shutdown
+}
+
 static void ampStart() {
   if (ampUp) return;
+  ampEnable(true);
   i2s_config_t cfg = {};
   cfg.mode                = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
   cfg.sample_rate         = SAMPLE_RATE;
@@ -265,7 +286,12 @@ static void ampStart() {
   ampUp = true;
 }
 
-static void ampStop() { if (ampUp) { i2s_driver_uninstall(I2S_AMP); ampUp = false; } }
+static void ampStop() {
+  if (ampUp) { i2s_driver_uninstall(I2S_AMP); ampUp = false; }
+  // Shut the amplifier down, not just the I2S driver. The driver going away
+  // stops the clocks; only SD low stops the 2.4mA.
+  ampEnable(false);
+}
 
 static void ampRate(int rate) { i2s_set_sample_rates(I2S_AMP, rate); }
 

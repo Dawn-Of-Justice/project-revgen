@@ -126,8 +126,8 @@ exactly like a dead microphone.
 | VIN | **5V** while breadboarding; **BAT+** in the final build — see below |
 | GND | GND |
 | BCLK / LRC / DIN | GPIO1 / 2 / 3 |
-| GAIN | leave floating for 9dB; tie to GND for 12dB |
-| **SD** | **tie to 3V3** — see below |
+| GAIN | tie to **GND** for 12dB (floating is 9dB) |
+| **SD** | breadboard: **3V3**. PCB: **GPIO5** — see below |
 | + / − | speaker (both to the amp, neither to GND) |
 
 **SD is the single most common cause of a silent MAX98357A.** It is not an
@@ -139,6 +139,15 @@ correct.
 
 Tie it to 3V3 and the ambiguity disappears. `firmware/audiotest` proves it
 either way by toggling SD between two identical tones.
+
+**On the PCB, give SD its own GPIO instead — it is the single most important
+pin for battery life.** Left enabled the amplifier draws ~2.4mA continuously,
+about 35x everything else in the sleeping device combined. Driving it low
+before deep sleep takes standby from ~2.5mA to ~0.07mA, which on a 1000mAh cell
+is the difference between charging every 12 days and every 37.
+
+`AMP_SD_PIN` in the firmware defaults to GPIO5. Set it to `-1` while SD is
+hard-wired to 3V3 on the breadboard.
 
 **On the breadboard, use the 5V pin.** It is live whenever USB is plugged in,
 and there is no battery yet, so BAT+ is dead.

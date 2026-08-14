@@ -60,6 +60,7 @@ Two blockers, both waiting on parts:
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Why it is built this way, and what was rejected | — |
 | [`docs/BOM.md`](docs/BOM.md) | Parts, with the specs that actually matter | ₹355 outstanding |
 | [`docs/WIRING.md`](docs/WIRING.md) | Pin assignment, breadboard wiring, bring-up order | — |
+| [`docs/PCB.md`](docs/PCB.md) | Carrier board: netlist, footprints, layout rules | ready to draw |
 
 ## Start here
 
