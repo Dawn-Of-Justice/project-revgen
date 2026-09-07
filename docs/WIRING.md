@@ -8,13 +8,17 @@ in the sketch together, or nothing works and it looks like a hardware fault.
 
 ---
 
-## Emitter — ESP32-C3 Super Mini
+## Emitter — classic ESP32 (current), C3 alternative
 
 | Signal | GPIO | Goes to |
 |---|---|---|
 | IR drive | **4** | 1kΩ → base of 2N2222A |
-| Status LED | **8** | onboard LED, active low — nothing to wire |
-| IR receive *(capture sketch only)* | **3** | TSOP1838 OUT |
+| Status LED | **2** classic / **8** C3 | onboard LED if fitted; C3 active low |
+| IR receive *(capture sketch only)* | **15** classic / **3** C3 | TSOP1838 OUT |
+
+The board connected on 2026-09-08 was identified as ESP32-D0WD-V3 revision
+3.1 with 4 MB flash. Select **ESP32 Dev Module** for it; the C3 instructions
+apply only when using the earlier C3 alternative.
 
 ### IR driver
 

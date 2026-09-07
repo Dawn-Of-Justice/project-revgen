@@ -22,3 +22,7 @@
 // Access Management -> Credentials, needs publish + subscribe.
 #define MQTT_USER_STR "revgen-emitter"
 #define MQTT_PASS_STR ""
+
+// Paste the broker's issuing root CA PEM here, obtained from the provider.
+// TLS refuses to start with an empty CA. Do not paste the broker leaf cert.
+static const char MQTT_CA_CERT[] = R"PEM()PEM";

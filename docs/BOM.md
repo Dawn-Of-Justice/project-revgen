@@ -14,12 +14,17 @@ Boards on hand:
 
 | Board | PSRAM | Role |
 |---|---|---|
-| **ESP32-C3 Super Mini** | none | **the emitter** — WiFi verified at -39 dBm |
-| ESP32-WROOM-32 (D0WD-V3, 4MB flash) | none — confirmed 0 bytes | spare / backup emitter |
+| ESP32-C3 Super Mini | none | Previously recorded emitter choice; historical WiFi result −39 dBm |
+| **Classic ESP32 (D0WD-V3, 4MB flash)** | none — previously confirmed 0 bytes | **Current emitter**, chip and flash identified over USB on 2026-09-08 |
 
 The WROOM-32 was checked for PSRAM in case it was a WROVER, which would have
 served as the voice unit and removed the XIAO from the list. It reported 0, so
 that shortcut is out.
+
+The connected emitter was identified as ESP32-D0WD-V3 revision 3.1 through a
+CP2104 USB bridge on COM8. Both boards can handle the emitter workload; PSRAM
+is not required. Use **ESP32 Dev Module**, 4 MB flash, PSRAM disabled for the
+current classic board. IR drive remains GPIO4; status LED is GPIO2 if fitted.
 
 The C3 uses different pins to a classic ESP32 (onboard LED on GPIO8, active
 low). `firmware/emitter/emitter.ino` handles both with

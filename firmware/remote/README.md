@@ -244,11 +244,14 @@ Confirm it worked by the serial monitor showing *nothing* — no boot messages.
 The COM port often changes number, so re-select it in Tools → Port before
 uploading.
 
-## Not yet compiled or run on hardware
+## Hardware verification status
 
-Written against the board but never built. Expect to fix things.
+The core remote operation has been compiled and verified on hardware. The carrier
+PCB A2 has passed CAD checks; see `pcb/remote/A2_CORRECTIONS.md`. Charging components have not been tested on the
+breadboard, and charging-related firmware behavior is still pending; first
+charging tests are planned on the PCB prototype.
 
-The most likely trouble is the I2S API: this targets the legacy `driver/i2s.h`,
+When changing ESP32 core versions, check the I2S API: this targets the legacy `driver/i2s.h`,
 present in ESP32 core 2.x and still present but deprecated in 3.x. If your core
 has removed it, migrate to `<ESP_I2S.h>` and the `I2SClass` wrapper — the logic
 is unchanged, only the calls differ.

@@ -2,22 +2,22 @@
 
 We never assume a published message arrived. Every plan carries an id, the
 emitter echoes it on the ack topic, and `send()` waits for it. Without that the
-backend cannot tell "fired" from "lost", and it would happily tell her the TV
-is on when nothing happened.
+backend cannot tell "accepted" from "lost". The ACK does not confirm that the
+IR sequence completed or that the appliance reacted.
 
-The emitter also registers a Last Will on the status topic, so `is_online`
-turns false within seconds of it dropping off rather than on the next timeout.
+The emitter also registers a Last Will on the status topic. Offline detection
+depends on the broker's keepalive timeout; it is not instantaneous.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 
 from paho.mqtt import client as mqtt
 
 from .config import settings
+from .emitter_protocol import encode_command
 from .schemas import Ack, Plan
 
 log = logging.getLogger(__name__)
@@ -65,13 +65,29 @@ class Emitter:
         self._client = client
 
     async def close(self) -> None:
+        self._mark_disconnected()
         if self._client:
-            self._client.loop_stop()
             self._client.disconnect()
+            await asyncio.to_thread(self._client.loop_stop)
+            self._client = None
+
+    def _mark_disconnected(self) -> None:
+        self.online = False
+        for future in self._pending.values():
+            if not future.done():
+                future.set_exception(EmitterOffline("mqtt link disconnected"))
+
+    def _dispatch(self, callback, *args) -> None:
+        if self._loop and not self._loop.is_closed():
+            self._loop.call_soon_threadsafe(callback, *args)
 
     # --- callbacks (paho thread) ---------------------------------------
 
     def _on_connect(self, client, _userdata, _flags, _rc, _props=None) -> None:
+        if _rc != 0:
+            self._dispatch(self._mark_disconnected)
+            log.warning("mqtt connection refused: %s", _rc)
+            return
         client.subscribe([(settings.topic_ack, 1), (settings.topic_status, 1)])
         log.info("mqtt connected to %s:%s", settings.mqtt_host, settings.mqtt_port)
 
@@ -79,12 +95,15 @@ class Emitter:
         # Our own link to the broker is down, so we cannot know the emitter's
         # state. Assume offline: she gets told the box is unreachable instead
         # of a confirmation for a command that went nowhere.
-        self.online = False
+        self._dispatch(self._mark_disconnected)
         log.warning("mqtt disconnected")
 
     def _on_message(self, _client, _userdata, msg) -> None:
         if msg.topic == settings.topic_status:
-            self.online = msg.payload.decode().strip() == "online"
+            self._dispatch(setattr, self, "online", msg.payload == b"online")
+            return
+
+        if msg.topic != settings.topic_ack:
             return
 
         try:
@@ -92,13 +111,19 @@ class Emitter:
         except Exception:
             return
 
-        future = self._pending.pop(ack.id, None)
-        if future and self._loop and not future.done():
-            self._loop.call_soon_threadsafe(future.set_result, ack)
+        self._dispatch(self._accept_ack, ack)
+
+    def _accept_ack(self, ack: Ack) -> None:
+        # The lookup and completion run together on asyncio's thread. An ACK
+        # arriving after wait_for cancelled its future must be harmless.
+        future = self._pending.get(ack.id)
+        if future is not None and not future.done():
+            future.set_result(ack)
 
     # --- sending --------------------------------------------------------
 
     async def send(self, plan: Plan) -> Ack:
+        payload = encode_command(plan, settings.topic_cmd)
         if settings.offline:
             log.info("offline: would publish %s", plan.model_dump_json())
             return Ack(id=plan.id, ok=True)
@@ -109,19 +134,20 @@ class Emitter:
             raise EmitterOffline("mqtt client not connected")
 
         future: asyncio.Future = asyncio.get_running_loop().create_future()
+        if plan.id in self._pending:
+            raise ValueError("command id already awaiting acknowledgement")
         self._pending[plan.id] = future
-
-        self._client.publish(
-            settings.topic_cmd,
-            json.dumps({"id": plan.id, "steps": [s.model_dump() for s in plan.steps]}),
-            qos=1,
-        )
-
         try:
+            result = self._client.publish(settings.topic_cmd, payload, qos=1, retain=False)
+            if result.rc != mqtt.MQTT_ERR_SUCCESS:
+                raise EmitterOffline(f"mqtt publish failed: {result.rc}")
             return await asyncio.wait_for(future, timeout=settings.ack_timeout_s)
         except asyncio.TimeoutError as exc:
-            self._pending.pop(plan.id, None)
             raise EmitterTimeout(f"no ack for {plan.id}") from exc
+        finally:
+            self._pending.pop(plan.id, None)
+            if not future.done():
+                future.cancel()
 
 
 emitter = Emitter()

@@ -31,6 +31,7 @@ check wiring and exercise the resolver.
 |---|---|
 | `tools/check_sarvam.py` | Batch-transcribes a folder of recordings and prints the resolved intents. Scores accuracy if files are named `01_tv_on__power_on.m4a`. |
 | `tools/fake_emitter.py` | Impersonates the IR emitter over the real broker: validates commands with the same rules as the firmware, prints each step, publishes an ack. |
+| `tools/test_emitter.py` | Tests a catalog button through the backend MQTT client, without speech APIs. Dry-run by default; `--execute` sends to the configured emitter. |
 | `tools/send_wav.py` | Posts an audio file at the backend and plays the reply. Saves it as `reply.wav` in the current directory. |
 | `tools/build_tts_cache.py` | Pre-generates every Malayalam phrase. Throttled to one request per 2.1s for the bulbul:v3 rate limit. |
 

@@ -29,9 +29,18 @@ The handheld works on real hardware: one press, hold to talk, release, and the
 backend returns the right IR plan with a spoken Malayalam confirmation. It
 updates over WiFi, so it stays fixable once it is sealed in a case.
 
+**PCB A3 corrects the amplifier for component-side-up mounting.** See the
+[correction record](pcb/remote/A3_CORRECTIONS.md). Owned-part fit and charging
+measurements remain pending. Use A3 files; A2 is superseded and A1 was rejected.
+
+The 120 x 45 mm rounded remote carrier PCB is routed, with Gerber/drill exports
+and zero reported DRC/ERC violations. See [assembly and fabrication files](pcb/README.md). Charging components have not been tested on
+the breadboard, and charging-related firmware behavior remains pending. First
+charging tests are planned on the PCB prototype.
+
 The emitter firmware is validated against `backend/tools/fake_emitter.py`, which
-impersonates it over the real broker using the same validation rules. The only
-untested part of the whole system is whether a physical IR LED flashes.
+impersonates it over the real broker using the same validation rules. Physical
+IR emission still needs hardware testing, as does the handheld charging path.
 
 Two blockers, both waiting on parts:
 
@@ -60,8 +69,8 @@ Two blockers, both waiting on parts:
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Why it is built this way, and what was rejected | — |
 | [`docs/BOM.md`](docs/BOM.md) | Parts, with the specs that actually matter | ₹355 outstanding |
 | [`docs/WIRING.md`](docs/WIRING.md) | Pin assignment, breadboard wiring, bring-up order | — |
-| [`docs/PCB.md`](docs/PCB.md) | Carrier board: netlist, footprints, layout rules | ready to draw |
-| [`docs/netlist.json`](docs/netlist.json) | Same netlist, machine-checkable against the schematic | 14 nets, 45 connections |
+| [`docs/PCB.md`](docs/PCB.md) | Carrier board: netlist, footprints, layout rules | routed; DRC/ERC pass; prototype files ready |
+| [`docs/netlist.json`](docs/netlist.json) | Same netlist, machine-checkable against the schematic | 17 nets, 75 connections |
 
 ## Start here
 

@@ -20,3 +20,6 @@ backend/logs/
 recordings/
 reply.wav
 firmware/**/build/
+
+pcb/
+

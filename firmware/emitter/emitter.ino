@@ -24,7 +24,7 @@
  *   ArduinoJson     >= 7.0   Benoit Blanchon
  *   WiFiManager     >= 2.0   tzapu
  *
- * BOARD: ESP32 Dev Module
+ * BOARD: ESP32C3 Dev Module, USB CDC On Boot enabled
  *
  * WIRING
  *   GPIO4 ── 1k ── base of 2N2222A
@@ -66,11 +66,7 @@
  *
  *     cp secrets.example.h secrets.h     and fill it in
  *
- * HiveMQ Cloud's free tier has no Asian region, so every command routes
- * Mumbai -> Frankfurt -> Kerala and the ack returns the same way: roughly
- * 500ms of pure geography. Tolerable, because the ack is published before IR
- * execution so nothing times out. If it ever needs fixing, run Mosquitto on
- * the Fly machine itself rather than paying for a region.
+ * Broker configuration and its issuing root CA are deployment-specific.
  */
 #include "secrets.h"
 
@@ -86,6 +82,8 @@ static const char *TOPIC_STATUS = "revgen/emitter/status";
 
 static const size_t   MAX_STEPS    = 24;
 static const uint32_t MAX_DELAY_MS = 10000;
+static const uint8_t MAX_REPEAT = 10;
+static const uint32_t DEDUP_MS = 5UL * 60UL * 1000UL;
 
 // If the broker is unreachable this long, reboot. The failure being guarded
 // against is a wedged network stack, not a broker outage -- and a reboot fixes
@@ -112,6 +110,17 @@ static Step   pending[MAX_STEPS];
 static size_t pendingCount = 0;
 static char   pendingId[48] = {0};
 static bool   hasPending = false;
+static char recentIds[8][48] = {};
+static uint32_t recentAt[8] = {};
+static size_t recentNext = 0;
+
+static bool alreadyAccepted(const char *id) {
+  for (size_t i = 0; i < 8; i++) {
+    if (recentIds[i][0] && millis() - recentAt[i] < DEDUP_MS &&
+        strcmp(recentIds[i], id) == 0) return true;
+  }
+  return false;
+}
 
 static uint32_t lastConnectedAt = 0;
 
@@ -145,15 +154,19 @@ static void publishAck(const char *id, bool ok, const char *error) {
 static bool parseSteps(JsonArray steps, const char **errorOut) {
   pendingCount = 0;
 
-  for (JsonObject step : steps) {
+  for (JsonVariant value : steps) {
+    if (!value.is<JsonObject>()) { *errorOut = "invalid step"; return false; }
+    JsonObject step = value.as<JsonObject>();
     if (pendingCount >= MAX_STEPS) { *errorOut = "too many steps"; return false; }
 
     const char *type = step["type"] | "";
     Step &s = pending[pendingCount];
 
     if (strcmp(type, "delay") == 0) {
-      uint32_t ms = step["ms"] | 0;
-      if (ms > MAX_DELAY_MS) { *errorOut = "delay too long"; return false; }
+      if (!step["ms"].is<uint32_t>() || step["ms"].as<uint32_t>() > MAX_DELAY_MS) {
+        *errorOut = "invalid delay"; return false;
+      }
+      uint32_t ms = step["ms"].as<uint32_t>();
       s.isDelay = true;
       s.delayMs = ms;
       pendingCount++;
@@ -164,18 +177,23 @@ static bool parseSteps(JsonArray steps, const char **errorOut) {
 
     const char *protocol = step["protocol"] | "";
     s.isDelay = false;
-    s.repeat  = step["repeat"] | 0;
+    if (!step["repeat"].isUnbound() &&
+        (!step["repeat"].is<uint32_t>() || step["repeat"].as<uint32_t>() > MAX_REPEAT)) {
+      *errorOut = "invalid repeat"; return false;
+    }
+    s.repeat = step["repeat"] | 0;
 
     if (strcmp(protocol, "panasonic") == 0) {
-      if (step["address"].isNull() || step["command"].isNull()) {
-        *errorOut = "panasonic needs address and command";
+      if (!step["address"].is<uint32_t>() || step["address"].as<uint32_t>() > 0xFFF ||
+          !step["command"].is<uint32_t>() || step["command"].as<uint32_t>() > 0xFF) {
+        *errorOut = "invalid panasonic fields";
         return false;
       }
       s.isPanasonic = true;
       s.address = step["address"].as<uint16_t>();
       s.command = (uint8_t)step["command"].as<uint16_t>();
     } else if (strcmp(protocol, "nec_raw") == 0) {
-      if (step["raw"].isNull()) { *errorOut = "nec_raw needs raw"; return false; }
+      if (!step["raw"].is<uint32_t>()) { *errorOut = "invalid raw"; return false; }
       s.isPanasonic = false;
       s.raw = step["raw"].as<uint32_t>();
     } else {
@@ -227,12 +245,7 @@ static void executePending() {
 // ---------------------------------------------------------------- mqtt
 
 static void onMessage(char *topic, byte *payload, unsigned int length) {
-  (void)topic;
-
-  if (hasPending) {
-    Serial.println("busy, dropping command");
-    return;
-  }
+  if (strcmp(topic, TOPIC_CMD) != 0) return;
 
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, payload, length);
@@ -242,7 +255,14 @@ static void onMessage(char *topic, byte *payload, unsigned int length) {
   }
 
   const char *id = doc["id"] | "";
-  if (!id[0]) { Serial.println("command has no id"); return; }
+  if (!id[0] || strlen(id) >= sizeof(pendingId) ||
+      doc["id"].as<JsonString>().size() != strlen(id)) {
+    Serial.println("invalid command id"); return;
+  }
+  // QoS1 may redeliver a command after its ACK was lost. Never repeat a
+  // recently accepted power toggle merely because transport retried it.
+  if (alreadyAccepted(id)) { publishAck(id, true, nullptr); return; }
+  if (hasPending) { publishAck(id, false, "busy"); return; }
   strncpy(pendingId, id, sizeof(pendingId) - 1);
   pendingId[sizeof(pendingId) - 1] = '\0';
 
@@ -267,8 +287,11 @@ static void onMessage(char *topic, byte *payload, unsigned int length) {
    * containing a 2.5s post-power wait takes longer than that to run, and she
    * would otherwise be told it failed while it was still working.
    */
-  publishAck(pendingId, true, nullptr);
   hasPending = true;
+  strcpy(recentIds[recentNext], pendingId);
+  recentAt[recentNext] = millis();
+  recentNext = (recentNext + 1) % 8;
+  publishAck(pendingId, true, nullptr);
 }
 
 static void connectMqtt() {
@@ -292,8 +315,11 @@ static void connectMqtt() {
   }
 
   Serial.println("connected");
-  mqtt.publish(TOPIC_STATUS, "online", true);
-  mqtt.subscribe(TOPIC_CMD, 1);
+  if (!mqtt.subscribe(TOPIC_CMD, 1) || !mqtt.publish(TOPIC_STATUS, "online", true)) {
+    mqtt.disconnect();
+    Serial.println("MQTT startup publish/subscribe failed");
+    return;
+  }
   lastConnectedAt = millis();
 
   for (int i = 0; i < 3; i++) { led(true); delay(80); led(false); delay(80); }
@@ -305,6 +331,8 @@ void setup() {
   Serial.begin(115200);
   delay(200);
   Serial.println("\nRevGen emitter");
+  Serial.printf("chip=%s flash=%u heap=%u IR GPIO=%d\n", ESP.getChipModel(),
+                ESP.getFlashChipSize(), ESP.getFreeHeap(), IR_SEND_PIN);
 
   pinMode(STATUS_LED_PIN, OUTPUT);
   led(false);
@@ -318,17 +346,21 @@ void setup() {
   // one router change bricks the device and someone has to drive over.
   WiFiManager wm;
   wm.setConfigPortalTimeout(180);
-  if (!wm.autoConnect("RevGen-Setup")) {
+  if (!wm.autoConnect("RevGen-Emitter")) {
     Serial.println("wifi portal timed out, restarting");
     ESP.restart();
   }
   Serial.printf("wifi ok, ip=%s\n", WiFi.localIP().toString().c_str());
 
   if (MQTT_TLS) {
-    // Not certificate-pinned. Hosted brokers rotate certificates, and a pinned
-    // cert that expires means a dead device in someone else's house. The
-    // exposure is a MITM on her home wifi, which is not the threat here.
-    secureClient.setInsecure();
+    // Trust the broker's issuing root CA, not a short-lived leaf certificate.
+    // Credentials must not be sent over an unauthenticated TLS connection.
+    if (!MQTT_CA_CERT[0]) {
+      Serial.println("Set MQTT_CA_CERT in secrets.h before using TLS");
+      while (true) delay(1000);
+    }
+    configTime(0, 0, "pool.ntp.org", "time.google.com");
+    secureClient.setCACert(MQTT_CA_CERT);
     mqtt.setClient(secureClient);
   } else {
     mqtt.setClient(plainClient);
@@ -339,13 +371,21 @@ void setup() {
   // PubSubClient defaults to a 256-byte buffer and SILENTLY DROPS anything
   // larger. Channel digits and multi-step volume exceed that easily. This one
   // line is the most common way this integration appears to work and does not.
-  mqtt.setBufferSize(2048);
+  if (!mqtt.setBufferSize(2048)) {
+    Serial.println("MQTT buffer allocation failed");
+    ESP.restart();
+  }
   mqtt.setKeepAlive(30);
 
   lastConnectedAt = millis();
 }
 
 void loop() {
+  if (mqtt.connected() && WiFi.status() == WL_CONNECTED) lastConnectedAt = millis();
+  if (millis() - lastConnectedAt > REBOOT_AFTER_OFFLINE_MS) {
+    Serial.println("network offline too long, restarting");
+    ESP.restart();
+  }
   if (WiFi.status() != WL_CONNECTED) {
     led(millis() % 500 < 250);      // fast blink: no wifi
     delay(50);

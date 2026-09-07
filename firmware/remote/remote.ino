@@ -39,7 +39,7 @@
  * still present (deprecated) in 3.x. If your core has removed it, the migration
  * is to <ESP_I2S.h> and the I2SClass wrapper; the logic below is unchanged.
  *
- * NOT YET COMPILED OR RUN ON HARDWARE.
+ * The RTC amplifier-shutdown change still needs verification on hardware.
  */
 
 #include <WiFi.h>
@@ -69,10 +69,11 @@
 /*
  * MAX98357A SD_MODE, and the single most important pin for battery life.
  *
- * Left enabled the amplifier draws ~2.4mA continuously -- about 35x everything
- * else in the sleeping device combined, and the thing that actually decides how
- * often she has to charge it. Driving it low before deep sleep takes standby
- * from ~2.5mA to ~0.07mA: roughly 12 days to 37 on a 1000mAh cell.
+ * With BCLK stopped, the amplifier enters ~340uA standby. Holding SD low
+ * instead selects ~0.6uA shutdown (MAX98357A datasheet typical IC currents).
+ * Total carrier sleep current and battery life still require measurement.
+ * GPIO5 is RTC-capable: retain its low output through deep sleep and release
+ * that hold on wake before enabling playback.
  *
  * Set to -1 if SD is hard-wired to 3V3 (breadboard). On the PCB, give it a
  * GPIO.
@@ -263,6 +264,15 @@ static void ampEnable(bool on) {
 
 static void ampStart() {
   if (ampUp) return;
+  if (AMP_SD_PIN >= 0) {
+    const gpio_num_t sd = (gpio_num_t)AMP_SD_PIN;
+    // Re-establish a known RTC state before releasing the previous sleep hold.
+    rtc_gpio_init(sd);
+    rtc_gpio_set_level(sd, 0);
+    rtc_gpio_set_direction(sd, RTC_GPIO_MODE_OUTPUT_ONLY);
+    rtc_gpio_hold_dis(sd);
+    rtc_gpio_deinit(sd);                  // return the pad to ordinary GPIO
+  }
   ampEnable(true);
   i2s_config_t cfg = {};
   cfg.mode                = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
@@ -287,10 +297,20 @@ static void ampStart() {
 }
 
 static void ampStop() {
-  if (ampUp) { i2s_driver_uninstall(I2S_AMP); ampUp = false; }
-  // Shut the amplifier down, not just the I2S driver. The driver going away
-  // stops the clocks; only SD low stops the 2.4mA.
+  // Mute before removing clocks; LRCLK must not disappear with BCLK running.
   ampEnable(false);
+  if (ampUp) { i2s_driver_uninstall(I2S_AMP); ampUp = false; }
+}
+
+static void ampHoldForSleep() {
+  if (AMP_SD_PIN < 0) return;
+  const gpio_num_t sd = (gpio_num_t)AMP_SD_PIN;
+  rtc_gpio_init(sd);
+  rtc_gpio_set_level(sd, 0);
+  rtc_gpio_set_direction(sd, RTC_GPIO_MODE_OUTPUT_ONLY);
+  rtc_gpio_pullup_dis(sd);
+  rtc_gpio_pulldown_dis(sd);
+  rtc_gpio_hold_en(sd);                   // latch output and mux through sleep
 }
 
 static void ampRate(int rate) { i2s_set_sample_rates(I2S_AMP, rate); }
@@ -877,6 +897,7 @@ static void maintenanceMode() {
 static void sleepNow() {
   micStop();
   ampStop();
+  ampHoldForSleep();
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
   digitalWrite(LED_PIN, HIGH);        // off (active low)

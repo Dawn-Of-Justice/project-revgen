@@ -33,12 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from paho.mqtt import client as mqtt   # noqa: E402
 
 from app.config import settings        # noqa: E402
-
-# Mirrors emitter.ino
-MAX_STEPS = 24
-MAX_DELAY_MS = 10_000
-KNOWN_PROTOCOLS = {"panasonic", "nec_raw"}
-
+from app.emitter_protocol import validate_steps  # noqa: E402
 
 def describe(step: dict) -> str:
     if step.get("type") == "delay":
@@ -53,29 +48,7 @@ def describe(step: dict) -> str:
 
 def validate(steps: list) -> str | None:
     """Same checks emitter.ino::parseSteps performs. Returns an error or None."""
-    if not steps:
-        return "empty sequence"
-    if len(steps) > MAX_STEPS:
-        return "too many steps"
-
-    for step in steps:
-        kind = step.get("type")
-        if kind == "delay":
-            if step.get("ms", 0) > MAX_DELAY_MS:
-                return "delay too long"
-        elif kind == "ir":
-            protocol = step.get("protocol")
-            if protocol not in KNOWN_PROTOCOLS:
-                return "unsupported protocol"
-            if protocol == "panasonic" and (
-                step.get("address") is None or step.get("command") is None
-            ):
-                return "panasonic needs address and command"
-            if protocol == "nec_raw" and step.get("raw") is None:
-                return "nec_raw needs raw"
-        else:
-            return "unknown step type"
-    return None
+    return validate_steps(steps)
 
 
 def on_connect(client, _u, _f, _rc, _p=None):
@@ -93,8 +66,17 @@ def on_message(client, _u, msg):
         print(f"[{stamp}] unparseable payload: {msg.payload[:120]!r}")
         return
 
+    if not isinstance(payload, dict):
+        print("invalid command object")
+        return
     plan_id = payload.get("id", "")
+    if not isinstance(plan_id, str) or not plan_id or len(plan_id.encode()) > 47 or "\0" in plan_id:
+        print("invalid command id")
+        return
     steps = payload.get("steps") or []
+    if not isinstance(steps, list):
+        client.publish(settings.topic_ack, json.dumps({"id": plan_id, "ok": False, "error": "no steps"}))
+        return
     print(f"[{stamp}] command {plan_id[:8]}  ({len(steps)} steps, "
           f"{len(msg.payload)}B of a 2048B firmware buffer)")
 
