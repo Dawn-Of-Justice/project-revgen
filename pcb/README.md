@@ -20,9 +20,10 @@ The separate 24 kHz playback compatibility finding remains open; see
 
 The native schematic is authoritative. A2 adds R6 (2.2 kΩ), R7 (10 kΩ), and
 a C&K 1101M2S3CQE2 switch. [Correction record](remote/A2_CORRECTIONS.md). Keep `revgen.pretty` and `fp-lib-table`
-alongside the project. `.trace_*` files are historical. Generator scripts reset
-placement/routing: do not rerun them over the finished PCB. Intermediate reports
-are provenance; final reports are `artifacts/final-drc.json` and `artifacts/erc.txt`.
+alongside the project. Superseded manufacturing archives, Trace drafts, routing
+intermediates and one-off layout scripts have been removed. The correction and
+review records remain as supporting documentation for A3. Final reports are
+`artifacts/final-drc.json` and `artifacts/erc.txt`.
 
 Validate from the repository root with KiCad 10 on PATH:
 
@@ -35,5 +36,7 @@ kicad-cli pcb drc --schematic-parity --format json --output pcb/remote/artifacts
 ```
 
 Run `pcb/audit_preorder.py` with KiCad Python to check masks, full parity and
-the A3 ZIP against current exports. Generator scripts are development tools,
-not a single-command reproduction of all manual routing/finish corrections.
+the A3 ZIP against current exports. `pcb/check_amplifier_orientation.py` checks
+the module orientation against the retained manufacturer reference.
+`pcb/package_a3.py` packages the checked native project and manufacturing exports;
+it does not regenerate the layout.
