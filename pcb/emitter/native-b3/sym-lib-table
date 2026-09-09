@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "RevGen")(type "KiCad")(uri "${KIPRJMOD}/RevGen.kicad_sym")(options "")(descr ""))
+)

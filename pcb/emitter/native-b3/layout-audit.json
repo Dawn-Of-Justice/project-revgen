@@ -1,0 +1,47 @@
+{
+  "functional_pads_verified": 45,
+  "led_centers": [
+    {
+      "reference": "D1",
+      "center_x_from_left_mm": 25.0,
+      "center_y_from_front_mm": 5.0
+    },
+    {
+      "reference": "D2",
+      "center_x_from_left_mm": 35.0,
+      "center_y_from_front_mm": 5.0
+    },
+    {
+      "reference": "D3",
+      "center_x_from_left_mm": 45.0,
+      "center_y_from_front_mm": 5.0
+    },
+    {
+      "reference": "D4",
+      "center_x_from_left_mm": 55.0,
+      "center_y_from_front_mm": 5.0
+    }
+  ],
+  "board_mm": [
+    80,
+    65
+  ],
+  "usb_side": "right",
+  "usb_centreline_from_front_mm": 40.3,
+  "usb_projection": "Not measured; right edge aligned with reserved module envelope, verify on actual board",
+  "mounting_holes_mm_from_top_left": [
+    [
+      4,
+      25
+    ],
+    [
+      4,
+      60
+    ],
+    [
+      76,
+      60
+    ]
+  ],
+  "mounting_hole_diameter_mm": 3.2
+}

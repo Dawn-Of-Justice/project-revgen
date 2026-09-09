@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "RevGenEmitter")(type "KiCad")(uri "${KIPRJMOD}/../revgen_emitter.pretty")(options "")(descr ""))
+)

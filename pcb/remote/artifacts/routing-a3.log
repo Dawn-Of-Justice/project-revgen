@@ -1,0 +1,115 @@
+2026-09-07 22:22:59.305 INFO   Freerouting v2.1.0 (build-date: 2025-04-12)
+2026-09-07 22:23:07.400 WARN   No default constructor found for field: currentLocale
+2026-09-07 22:23:07.401 INFO   Settings were loaded from freerouting.json
+java.util.concurrent.CompletionException: java.net.ConnectException: Permission denied: getsockopt
+	at java.base/java.util.concurrent.CompletableFuture.encodeRelay(Unknown Source)
+	at java.base/java.util.concurrent.CompletableFuture.completeRelay(Unknown Source)
+	at java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(Unknown Source)
+	at java.base/java.util.concurrent.CompletableFuture.postComplete(Unknown Source)
+	at java.base/java.util.concurrent.CompletableFuture.completeExceptionally(Unknown Source)
+	at java.net.http/jdk.internal.net.http.PlainHttpConnection$ConnectEvent.lambda$handle$2(Unknown Source)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source)
+	at java.base/java.lang.Thread.run(Unknown Source)
+Caused by: java.net.ConnectException: Permission denied: getsockopt
+	at java.net.http/jdk.internal.net.http.common.Utils.toConnectException(Unknown Source)
+	at java.net.http/jdk.internal.net.http.PlainHttpConnection$ConnectEvent.handle(Unknown Source)
+	at java.net.http/jdk.internal.net.http.HttpClientImpl$SelectorManager.handleEvent(Unknown Source)
+	at java.net.http/jdk.internal.net.http.HttpClientImpl$SelectorManager.lambda$run$3(Unknown Source)
+	at java.base/java.util.ArrayList.forEach(Unknown Source)
+	at java.net.http/jdk.internal.net.http.HttpClientImpl$SelectorManager.run(Unknown Source)
+Caused by: java.net.SocketException: Permission denied: getsockopt
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Unknown Source)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(Unknown Source)
+	... 5 more
+2026-09-07 22:23:09.318 INFO   [E3539D\7FAE22] Job 'E3539D\7FAE22' started at 2026-09-07T16:53:09.318959900Z
+2026-09-07 22:23:12.037 INFO   [E3539D\7FAE22] Auto-router pass #1 on board 'e6de3ed5af699d01ebb8b477381e8cac' was completed in 2.25 seconds with the score of 970.72 (3 unrouted), using 2.27 CPU seconds and 422 MB memory.
+2026-09-07 22:23:12.917 INFO   [E3539D\7FAE22] Auto-router pass #2 on board '088f2d0ee781e68c980aa5574572da2c' was completed in 0.80 seconds with the score of 979.76 (1 unrouted), using 4.69 CPU seconds and 727 MB memory.
+2026-09-07 22:23:13.244 INFO   [E3539D\7FAE22] Auto-router pass #3 on board '21d9ba1f95fcfc27b0a2e7b0ab1297de' was completed in 0.27 seconds with the score of 979.76 (1 unrouted), using 4.69 CPU seconds and 727 MB memory.
+2026-09-07 22:23:13.829 INFO   [E3539D\7FAE22] Auto-router pass #4 on board '677dbab40c997287633216b0700870af' was completed in 0.54 seconds with the score of 979.76 (1 unrouted), using 7.95 CPU seconds and 1045 MB memory.
+2026-09-07 22:23:14.137 INFO   [E3539D\7FAE22] Auto-router pass #5 on board '677dbab40c997287633216b0700870af' was completed in 0.28 seconds with the score of 979.76 (1 unrouted), using 7.95 CPU seconds and 1045 MB memory.
+2026-09-07 22:23:14.438 INFO   [E3539D\7FAE22] Auto-router pass #6 on board '18d696c38b1ee53dfd1f7ef8991380c8' was completed in 0.25 seconds with the score of 979.76 (1 unrouted), using 12.05 CPU seconds and 1383 MB memory.
+2026-09-07 22:23:14.760 INFO   [E3539D\7FAE22] Auto-router pass #7 on board '7ab37b21bc1099e88c6237753fa270c3' was completed in 0.26 seconds with the score of 979.76 (1 unrouted), using 12.05 CPU seconds and 1383 MB memory.
+2026-09-07 22:23:15.268 INFO   [E3539D\7FAE22] Auto-router pass #8 on board '74af4eb7a3b0f04e69cc791ef9852866' was completed in 0.45 seconds with the score of 979.76 (1 unrouted), using 12.05 CPU seconds and 1383 MB memory.
+2026-09-07 22:23:15.524 INFO   [E3539D\7FAE22] Auto-router pass #9 on board '74af4eb7a3b0f04e69cc791ef9852866' was completed in 0.23 seconds with the score of 979.76 (1 unrouted), using 16.95 CPU seconds and 1746 MB memory.
+2026-09-07 22:23:15.798 INFO   [E3539D\7FAE22] Auto-router pass #10 on board '5a3f7c899edacbbefc5ded29cc89f299' was completed in 0.22 seconds with the score of 979.76 (1 unrouted), using 16.95 CPU seconds and 1746 MB memory.
+2026-09-07 22:23:16.141 INFO   [E3539D\7FAE22] Auto-router pass #11 on board '756e05833b4b5dc06c443c96f5b143ab' was completed in 0.28 seconds with the score of 979.76 (1 unrouted), using 16.95 CPU seconds and 1746 MB memory.
+2026-09-07 22:23:16.627 INFO   [E3539D\7FAE22] Restoring an earlier board that has the score of 979.76 (1 unrouted).
+2026-09-07 22:23:16.628 INFO   [E3539D\7FAE22] Auto-router pass #12 on board '17ff3845ee91947200b2db0a64ccf53c' was completed in 0.44 seconds with the score of 979.76 (1 unrouted), using 22.84 CPU seconds and 2136 MB memory.
+2026-09-07 22:23:16.961 INFO   [E3539D\7FAE22] Auto-router pass #13 on board '21d9ba1f95fcfc27b0a2e7b0ab1297de' was completed in 0.32 seconds with the score of 979.76 (1 unrouted), using 22.84 CPU seconds and 2136 MB memory.
+2026-09-07 22:23:17.242 INFO   [E3539D\7FAE22] Auto-router pass #14 on board '1565fbbffa762336cb5c62809a8567f2' was completed in 0.24 seconds with the score of 979.76 (1 unrouted), using 22.84 CPU seconds and 2136 MB memory.
+2026-09-07 22:23:17.564 INFO   [E3539D\7FAE22] Auto-router pass #15 on board '41ce2cb8aff3102e1b7e41940d461c99' was completed in 0.28 seconds with the score of 979.76 (1 unrouted), using 29.72 CPU seconds and 2627 MB memory.
+2026-09-07 22:23:17.858 INFO   [E3539D\7FAE22] Auto-router pass #16 on board '84ebc8d82f29c69df785eb830adb498b' was completed in 0.26 seconds with the score of 984.01, using 29.72 CPU seconds and 2627 MB memory.
+2026-09-07 22:23:17.903 INFO   [E3539D\7FAE22] Auto-router pass #17 on board '562f75a6cbc385d0a348b0598883b9b1' was completed in 0.01 seconds with the score of 984.01, using 29.72 CPU seconds and 2627 MB memory.
+{
+  "host": "KiCad's Pcbnew,10.0.6",
+  "unit": "mm",
+  "board": {
+    "bounding_box": {
+      "x": 1451.0,
+      "y": -499.0,
+      "width": 999.0,
+      "height": -1701.0
+    },
+    "size": {
+      "x": 0.0,
+      "y": 0.0,
+      "width": 452.0,
+      "height": 1202.0
+    }
+  },
+  "layers": {
+    "total_count": 2,
+    "signal_count": 2
+  },
+  "items": {
+    "total_count": 867,
+    "trace_count": 95,
+    "via_count": 25,
+    "conduction_area_count": 2,
+    "drill_item_count": 95,
+    "pin_count": 0,
+    "component_count": 630,
+    "other_count": 20
+  },
+  "components": {
+    "total_count": 39
+  },
+  "pads": {
+    "total_count": 95
+  },
+  "nets": {
+    "total_count": 21,
+    "class_count": 6
+  },
+  "connections": {
+    "maximum_count": 196,
+    "incomplete_count": 0
+  },
+  "traces": {
+    "total_count": 95,
+    "total_segment_count": 160,
+    "total_length": 10636.184,
+    "total_weighted_length": 2.6497598E7,
+    "average_length": 111.95983,
+    "total_vertical_length": 3786.421,
+    "total_horizontal_length": 2289.624,
+    "total_angled_length": 5054.5596
+  },
+  "bends": {
+    "total_count": 65,
+    "90_degree_count": 0,
+    "45_degree_count": 65,
+    "other_angle_count": 0
+  },
+  "vias": {
+    "total_count": 25,
+    "through_hole_count": 25,
+    "blind_count": 0,
+    "buried_count": 0
+  },
+  "clearance_violations": {
+    "total_count": 0
+  }
+}

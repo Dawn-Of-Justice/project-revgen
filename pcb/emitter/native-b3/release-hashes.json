@@ -1,0 +1,17 @@
+{
+  "pcb_sha256": "0d14a0f2288783d01460a8a664beb36cabfdd036083cf28555f6b586757aef92",
+  "gerber_zip_sha256": "003cea98efbb261b1ea1a12610e4d511f8a01ee4b0d6565f2b4ee933cc8c0c7c",
+  "zip_matches_export_directory": true,
+  "files": [
+    "emitter-B_Cu.gbl",
+    "emitter-B_Mask.gbs",
+    "emitter-B_Silkscreen.gbo",
+    "emitter-Edge_Cuts.gm1",
+    "emitter-F_Cu.gtl",
+    "emitter-F_Mask.gts",
+    "emitter-F_Silkscreen.gto",
+    "emitter-job.gbrjob",
+    "emitter-NPTH.drl",
+    "emitter-PTH.drl"
+  ]
+}
