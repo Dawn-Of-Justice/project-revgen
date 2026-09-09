@@ -17,9 +17,10 @@ __pycache__/
 # generated
 backend/cache/
 backend/logs/
+backend/learned_commands.json
+backend/learned_commands.tmp
 recordings/
 reply.wav
 firmware/**/build/
 
 pcb/
-

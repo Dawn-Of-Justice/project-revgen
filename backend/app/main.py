@@ -38,6 +38,7 @@ from .resolver import State
 from .schemas import Intent
 from .stt import STTError, transcribe
 from .tts import speak_all
+from .learning import LearningStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("revgen")
@@ -52,8 +53,19 @@ limiter = Limiter(
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    catalog.raw = Catalog.load(settings.catalog_path).raw
+    if hasattr(catalog, "_learning_base"):
+        del catalog._learning_base
+    learned = LearningStore(settings.data_dir / "learned_commands.json")
+    learned.apply(catalog)
+    def accept_learning(payload):
+        ack = learned.accept(payload)
+        learned.apply(catalog)
+        return ack
+    emitter.learning_handler = accept_learning
     await emitter.connect()
     yield
+    emitter.learning_handler = None
     await emitter.close()
 
 
@@ -104,6 +116,7 @@ async def health() -> dict:
         "ok": True,
         "emitter_online": emitter.online,
         "offline_mode": settings.offline,
+        "learned_commands": len(catalog.raw.get("learned", {})),
         "channels_configured": sum(
             1 for name in catalog.channel_names() if catalog.channel_number(name)
         ),
@@ -149,6 +162,9 @@ async def command(
         )
 
     data = await file.read()
+    # Mapping uploads replace catalog.raw atomically; keep one snapshot for
+    # intent extraction, resolution and confirmation throughout this request.
+    request_catalog = Catalog(catalog.raw)
 
     if len(data) > settings.max_upload_bytes:
         # Refuse before paying Saaras to transcribe whatever this is.
@@ -166,11 +182,11 @@ async def command(
 
     try:
         transcript = await transcribe(data, file.filename or "command.wav")
-        intents = await extract(transcript, catalog)
+        intents = await extract(transcript, request_catalog)
 
         plan = resolver.resolve(
             intents,
-            catalog,
+            request_catalog,
             state,
             now=time.time(),
             debounce_s=settings.power_debounce_s,
@@ -187,9 +203,9 @@ async def command(
                 phrase_key = "err.no_ack"
 
         if phrase_key == "err.no_ack":
-            texts = [catalog.phrase("err.no_ack")]
+            texts = [request_catalog.phrase("err.no_ack")]
         else:
-            texts = [catalog.phrase(p.key, **p.args) for p in plan.phrases]
+            texts = [request_catalog.phrase(p.key, **p.args) for p in plan.phrases]
 
     except STTError as exc:
         log.warning("stt failed: %s", exc)

@@ -6,6 +6,7 @@ $fqbn = if ($Target -eq 'c3') { 'esp32:esp32:esp32c3:CDCOnBoot=cdc' } else { 'es
 $sketchRoot = Join-Path $buildRoot 'emitter'
 New-Item -ItemType Directory -Force -Path $sketchRoot | Out-Null
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'emitter.ino') -Destination $sketchRoot
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'learning.h'), (Join-Path $PSScriptRoot 'learning_page.h') -Destination $sketchRoot
 $configName = if ($UseSecrets) { 'secrets.h' } else { 'secrets.example.h' }
 if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot $configName))) { throw "Missing $configName" }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot $configName) -Destination (Join-Path $sketchRoot 'secrets.h')

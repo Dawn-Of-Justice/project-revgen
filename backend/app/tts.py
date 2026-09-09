@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import json
 import wave
 from pathlib import Path
 
@@ -27,17 +28,42 @@ class TTSError(Exception):
 
 
 def cache_path(text: str) -> Path:
-    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+    # Changing the voice or format must not reuse an old (e.g. 24 kHz) clip.
+    key = [text, settings.tts_model, settings.tts_speaker, settings.tts_pace,
+           settings.tts_sample_rate, "ml-IN", "wav", settings.offline]
+    digest = hashlib.sha256(json.dumps(key).encode("utf-8")).hexdigest()[:16]
     return settings.tts_cache_dir / f"{digest}.wav"
+
+
+def _validate_wav(audio: bytes) -> None:
+    """Enforce the mono PCM16 contract used by the remote's I2S playback."""
+    rate = int(settings.tts_sample_rate)
+    if rate not in {8000, 16000, 32000, 44100, 48000}:
+        raise TTSError("TTS sample rate is unsupported by the remote amplifier")
+    try:
+        with wave.open(io.BytesIO(audio), "rb") as reader:
+            if (reader.getnchannels(), reader.getsampwidth(), reader.getframerate()) != (1, 2, rate):
+                raise TTSError("TTS audio must be mono PCM16 at the configured sample rate")
+            frames = reader.getnframes()
+            if frames == 0 or len(reader.readframes(frames)) != frames * 2:
+                raise TTSError("TTS audio is empty or truncated")
+    except (wave.Error, EOFError) as exc:
+        raise TTSError("TTS returned invalid WAV audio") from exc
 
 
 async def speak(text: str) -> bytes:
     """Return WAV bytes for `text`, generating and caching on a miss."""
     path = cache_path(text)
     if path.exists():
-        return path.read_bytes()
+        audio = path.read_bytes()
+        try:
+            _validate_wav(audio)
+            return audio
+        except TTSError:
+            pass  # Regenerate a corrupt or obsolete cache entry.
 
     audio = await _synthesise(text)
+    _validate_wav(audio)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(audio)
     return audio
@@ -88,7 +114,13 @@ def _concat_wav(clips: list[bytes]) -> bytes:
 
 async def _synthesise(text: str) -> bytes:
     if settings.offline:
-        return b"RIFF____WAVEfmt "  # placeholder; enough to prove the wiring
+        out = io.BytesIO()
+        with wave.open(out, "wb") as writer:
+            writer.setnchannels(1)
+            writer.setsampwidth(2)
+            writer.setframerate(int(settings.tts_sample_rate))
+            writer.writeframes(b"\x00\x00" * (int(settings.tts_sample_rate) // 10))
+        return out.getvalue()  # Valid silence for offline integration tests.
 
     if not settings.sarvam_api_key:
         raise TTSError("SARVAM_API_KEY is not set")
@@ -107,8 +139,6 @@ async def _synthesise(text: str) -> bytes:
                     "model": settings.tts_model,
                     "speaker": settings.tts_speaker,
                     "pace": settings.tts_pace,
-                    # Sample rate is an intelligibility decision, not a size
-                    # one. See settings.tts_sample_rate.
                     "speech_sample_rate": settings.tts_sample_rate,
                     "output_audio_codec": "wav",
                 },

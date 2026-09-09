@@ -139,6 +139,13 @@ automatically by `#if CONFIG_IDF_TARGET_ESP32C3`.
 
 On a C3, enable **USB CDC On Boot** in the IDE or there is no serial output.
 
+## Learning mode
+
+Hold GPIO27's button for five seconds, then open `http://revgen-emitter.local/`
+on the same Wi-Fi. GPIO15 receives IR. Capture two separate matching presses,
+test, name and save the command. See [the learning guide](../../docs/EMITTER_LEARNING.md)
+for wiring, supported protocols, backend rollout and remaining hardware tests.
+
 ## Testing
 
 The simplest check is to send a real command from the deployed backend and

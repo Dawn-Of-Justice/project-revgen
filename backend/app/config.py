@@ -26,18 +26,10 @@ class Settings(BaseSettings):
     tts_speaker: str = "kavitha"
     tts_pace: float = 0.9              # slightly slow: the listener is elderly
 
-    # 24kHz, not 16kHz.
-    #
-    # This was originally 16kHz to keep the download small, which was the wrong
-    # trade. Halving the sample rate halves the audio bandwidth to 8kHz, and the
-    # consonants that carry intelligibility -- s, sh, th -- live above that.
-    # Losing them makes speech sound muffled, and a hard-of-hearing listener is
-    # exactly who cannot afford it.
-    #
-    # Costs roughly 1.5x the bytes, so ~2s more on the download. Worth it: she
-    # has to understand the confirmation, and the local beep already answers the
-    # only time-critical question ("did it hear me?").
-    tts_sample_rate: str = "24000"
+    # 32 kHz is supported by both Bulbul v3 REST and the MAX98357A.
+    # The remote clocks playback directly at the WAV's rate; 24 kHz is not
+    # a supported MAX98357A LRCLK frequency.
+    tts_sample_rate: str = "32000"
 
     # --- MQTT -----------------------------------------------------------
     mqtt_host: str = "localhost"
@@ -48,6 +40,8 @@ class Settings(BaseSettings):
     topic_cmd: str = "revgen/emitter/cmd"
     topic_ack: str = "revgen/emitter/ack"
     topic_status: str = "revgen/emitter/status"   # emitter LWT publishes here
+    topic_learn: str = "revgen/emitter/learn"
+    topic_learn_ack: str = "revgen/emitter/learn_ack"
     ack_timeout_s: float = 2.5
 
     # --- Safety ---------------------------------------------------------

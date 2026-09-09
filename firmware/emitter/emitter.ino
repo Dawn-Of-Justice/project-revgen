@@ -2,8 +2,8 @@
  * RevGen IR emitter
  * -----------------
  * Sits on the TV cabinet, mains powered, and fires IR when the backend tells
- * it to. Deliberately the dumbest component in the system: it holds no IR
- * codes, no device names, and no idea what Malayalam is.
+ * it to. It also learns named IR commands during a physically enabled setup
+ * session; language understanding stays on the backend.
  *
  * The backend sends complete IR descriptors, so adding her air conditioner
  * later means editing config/commands.json on the server -- not reflashing a
@@ -27,9 +27,9 @@
  * BOARD: ESP32C3 Dev Module, USB CDC On Boot enabled
  *
  * WIRING
- *   GPIO4 ── 1k ── base of 2N2222A
+ *   B2 carrier: GPIO4 -> 220R -> AO3400A gate; 10k gate-to-source pull-down.
  *   4x IR LED (940nm) in parallel, EACH with its own 100R resistor, from 5V
- *   to the collector. Transistor emitter to GND.
+ *   to the drain. MOSFET source to GND. Button GPIO27, receiver OUT GPIO15.
  *   Do not share one resistor across the LEDs -- they do not current-share and
  *   one ends up doing all the work.
  *   Fan them across roughly 90 degrees so aiming is designed out of the system.
@@ -244,7 +244,10 @@ static void executePending() {
 
 // ---------------------------------------------------------------- mqtt
 
+#include "learning.h"
+
 static void onMessage(char *topic, byte *payload, unsigned int length) {
+  if (strcmp(topic, TOPIC_LEARN_ACK) == 0) { learningAck(payload, length); return; }
   if (strcmp(topic, TOPIC_CMD) != 0) return;
 
   JsonDocument doc;
@@ -262,6 +265,7 @@ static void onMessage(char *topic, byte *payload, unsigned int length) {
   // QoS1 may redeliver a command after its ACK was lost. Never repeat a
   // recently accepted power toggle merely because transport retried it.
   if (alreadyAccepted(id)) { publishAck(id, true, nullptr); return; }
+  if (learningActive) { publishAck(id, false, "learning mode active"); return; }
   if (hasPending) { publishAck(id, false, "busy"); return; }
   strncpy(pendingId, id, sizeof(pendingId) - 1);
   pendingId[sizeof(pendingId) - 1] = '\0';
@@ -315,7 +319,8 @@ static void connectMqtt() {
   }
 
   Serial.println("connected");
-  if (!mqtt.subscribe(TOPIC_CMD, 1) || !mqtt.publish(TOPIC_STATUS, "online", true)) {
+  if (!mqtt.subscribe(TOPIC_CMD, 1) || !mqtt.subscribe(TOPIC_LEARN_ACK, 1) ||
+      !mqtt.publish(TOPIC_STATUS, "online", true)) {
     mqtt.disconnect();
     Serial.println("MQTT startup publish/subscribe failed");
     return;
@@ -376,18 +381,21 @@ void setup() {
     ESP.restart();
   }
   mqtt.setKeepAlive(30);
+  mqtt.setSocketTimeout(2);
+  learningSetup();
 
   lastConnectedAt = millis();
 }
 
 void loop() {
+  learningLoop();
   if (mqtt.connected() && WiFi.status() == WL_CONNECTED) lastConnectedAt = millis();
-  if (millis() - lastConnectedAt > REBOOT_AFTER_OFFLINE_MS) {
+  if (!learningActive && millis() - lastConnectedAt > REBOOT_AFTER_OFFLINE_MS) {
     Serial.println("network offline too long, restarting");
     ESP.restart();
   }
   if (WiFi.status() != WL_CONNECTED) {
-    led(millis() % 500 < 250);      // fast blink: no wifi
+    if (!learningActive) led(millis() % 500 < 250);      // fast blink: no wifi
     delay(50);
     return;
   }
@@ -398,11 +406,11 @@ void loop() {
       lastAttempt = millis();
       connectMqtt();
     }
-    if (millis() - lastConnectedAt > REBOOT_AFTER_OFFLINE_MS) {
+    if (!learningActive && millis() - lastConnectedAt > REBOOT_AFTER_OFFLINE_MS) {
       Serial.println("offline too long, restarting");
       ESP.restart();
     }
-    led(millis() % 1000 < 100);     // slow pulse: wifi ok, no broker
+    if (!learningActive) led(millis() % 1000 < 100);     // slow pulse: wifi ok, no broker
     delay(20);
     return;
   }

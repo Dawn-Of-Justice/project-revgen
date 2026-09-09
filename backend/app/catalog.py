@@ -89,6 +89,8 @@ class Catalog:
     # --- phrases --------------------------------------------------------
 
     def phrase(self, key: str, **args: str) -> str:
+        if key == "learned.sent":
+            return "കമാൻഡ് അയച്ചു."
         text = self.raw["phrases"].get(key)
         if text is None:
             return self.raw["phrases"]["err.internal"]
@@ -96,4 +98,6 @@ class Catalog:
 
     def all_phrases(self) -> dict[str, str]:
         """Everything the cache builder needs to pre-generate."""
-        return {k: v for k, v in self.raw["phrases"].items() if not k.startswith("_")}
+        phrases = {k: v for k, v in self.raw["phrases"].items() if not k.startswith("_")}
+        phrases["learned.sent"] = self.phrase("learned.sent")
+        return phrases

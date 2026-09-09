@@ -116,6 +116,19 @@ def _resolve_one(
     if intent.action is Action.UNKNOWN or intent.confidence != "high":
         return refuse("err.not_understood")
 
+    if intent.action is Action.LEARNED:
+        entry = catalog.raw.get("learned", {}).get(intent.command_key)
+        if entry is None:
+            return refuse("err.not_understood")
+        from .schemas import IRStep
+        key = entry["device"]
+        if entry["behavior"] == "power_toggle":
+            if now - state.last_power_sent.get(key, float("-inf")) < debounce_s:
+                return refuse("err.too_soon")
+            state.last_power_sent[key] = now
+        return Plan(id=plan_id, steps=[IRStep.model_validate(entry["code"])],
+                    phrases=[Phrase(key="learned.sent")])
+
     device = intent.device or _default_device(intent.action)
     if device is None:
         return refuse("err.not_understood")

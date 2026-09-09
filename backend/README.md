@@ -96,6 +96,21 @@ Already provisioned: app `project-revgen`, region `bom`, one machine, volume
 fly deploy
 ```
 
+The backend now defaults to **32 kHz mono PCM16** replies. Both
+[Bulbul v3 REST](https://docs.sarvam.ai/api-reference/text-to-speech/convert)
+and the [MAX98357A](https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf)
+support 32 kHz; the amplifier does not support the previous 24 kHz clock.
+After deploying this change, run `fly ssh console -C "python tools/build_tts_cache.py"`
+to warm the new cache before normal use. Settings-aware cache keys bypass old
+clips automatically. Check for an existing `TTS_SAMPLE_RATE` environment/secret
+override and change it to `32000` if present. Offline silence uses a separate
+cache key and cannot replace production speech.
+
+Deployment of this audio change is pending as of 2026-09-08. The production
+voice-to-physical-emitter test passed with a synthetic English volume command;
+the reply still measured 24 kHz. See
+[the device validation log](../firmware/emitter/VALIDATION.md) for exact evidence.
+
 Secrets currently set — `SARVAM_API_KEY`, `DEVICE_TOKEN`, `MQTT_HOST`,
 `MQTT_USERNAME`, `MQTT_PASSWORD`. Non-secret config (`DATA_DIR`, `MQTT_PORT`,
 `MQTT_TLS`) is in `fly.toml`. Each `fly secrets set` restarts the machine.
@@ -226,3 +241,11 @@ overnight — and the daily cap is the backstop, bounding a bad day at roughly �
 Both sit above `file.read()`, so a throttled request never reaches Saaras.
 Watch `requests.today` on `/health` climbing while nobody is using it; that is
 what a wedged client looks like from outside.
+
+## Learned IR commands
+
+The emitter uploads named mappings on `revgen/emitter/learn`; the backend
+validates and persists them to `DATA_DIR/learned_commands.json` before replying
+on `revgen/emitter/learn_ack`. Grant both clients the corresponding broker ACLs.
+The catalog and LLM prompt include accepted commands without restarting.
+See [the learning guide](../docs/EMITTER_LEARNING.md) for rollout and limitations.

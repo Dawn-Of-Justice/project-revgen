@@ -35,6 +35,7 @@ class Action(str, Enum):
     CHANNEL_DOWN = "channel_down"
     CHANNEL_SET = "channel_set"
     UNKNOWN = "unknown"
+    LEARNED = "learned"
 
 
 class Intent(BaseModel):
@@ -51,6 +52,7 @@ class Intent(BaseModel):
     )
     steps: int = Field(default=1, ge=1, le=10, description="Repeat count for volume")
     confidence: Literal["high", "low"] = "low"
+    command_key: Optional[str] = Field(default=None, max_length=65)
 
 
 # --- Backend -> Emitter -------------------------------------------------

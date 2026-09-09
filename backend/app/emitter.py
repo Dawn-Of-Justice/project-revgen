@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import json
 
 from paho.mqtt import client as mqtt
 
@@ -37,6 +38,7 @@ class Emitter:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._pending: dict[str, asyncio.Future] = {}
         self.online = False
+        self.learning_handler = None
 
     # --- lifecycle ------------------------------------------------------
 
@@ -88,7 +90,8 @@ class Emitter:
             self._dispatch(self._mark_disconnected)
             log.warning("mqtt connection refused: %s", _rc)
             return
-        client.subscribe([(settings.topic_ack, 1), (settings.topic_status, 1)])
+        client.subscribe([(settings.topic_ack, 1), (settings.topic_status, 1),
+                          (settings.topic_learn, 1)])
         log.info("mqtt connected to %s:%s", settings.mqtt_host, settings.mqtt_port)
 
     def _on_disconnect(self, _client, _userdata, *args) -> None:
@@ -99,6 +102,10 @@ class Emitter:
         log.warning("mqtt disconnected")
 
     def _on_message(self, _client, _userdata, msg) -> None:
+        if msg.topic == settings.topic_learn:
+            if not msg.retain and len(msg.payload) <= 1536:
+                self._dispatch(self._accept_learning, bytes(msg.payload))
+            return
         if msg.topic == settings.topic_status:
             self._dispatch(setattr, self, "online", msg.payload == b"online")
             return
@@ -112,6 +119,25 @@ class Emitter:
             return
 
         self._dispatch(self._accept_ack, ack)
+
+    def _accept_learning(self, payload: bytes) -> None:
+        if self.learning_handler is None or self._client is None:
+            return  # Emitter retains the outbox and retries after backend startup.
+        try:
+            ack = self.learning_handler(payload)
+        except OSError:
+            log.exception("learning storage unavailable; emitter will retry")
+            return  # Keep the durable outbox pending after a transient disk failure.
+        except Exception as exc:
+            log.warning("learning update refused: %s", type(exc).__name__)
+            try:
+                ident = json.loads(payload).get("id")
+                if not isinstance(ident, str) or not 8 <= len(ident) <= 48:
+                    return
+            except (ValueError, AttributeError):
+                return
+            ack = {"id": ident, "ok": False, "error": "Invalid or stale mapping; edit and save again"}
+        self._client.publish(settings.topic_learn_ack, json.dumps(ack), qos=1, retain=False)
 
     def _accept_ack(self, ack: Ack) -> None:
         # The lookup and completion run together on asyncio's thread. An ACK
