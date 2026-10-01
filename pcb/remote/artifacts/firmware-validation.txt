@@ -1,0 +1,17 @@
+RevGen A2 firmware build validation
+Date: 2026-09-07
+Result: PASS; compile and link exited 0 and produced remote.ino.bin.
+Arduino CLI: arduino-cli  Version: 1.5.1 Commit: 01f3d4f2b Date: 2026-06-05T10:22:12Z
+ESP32 Arduino core: 3.3.11
+WiFiManager: 2.0.17 (temporary build dependency)
+FQBN: esp32:esp32:XIAO_ESP32S3:PSRAM=opi,CDCOnBoot=default,PartitionScheme=default_8MB
+Command: arduino-cli --config-file firmware/remote/build/review/arduino-cli.yaml compile -b esp32:esp32:XIAO_ESP32S3:PSRAM=opi,CDCOnBoot=default,PartitionScheme=default_8MB --build-path firmware/remote/build/review/output --verbose firmware/remote/build/review/remote
+Staged remote.ino exactly matches firmware/remote/remote.ino.
+Source SHA256: 03BFC981EC182FE22105F085B55BA13B6F1173671D107E05EA3420AF6FF4A155
+Secrets: staged secrets.example.h as secrets.h; real credentials were not used.
+Sketch uses 1181510 / 3342336 bytes (35%).
+Global variables use 52260 / 327680 bytes (15%); 275420 bytes remain.
+Firmware binary length: 1181888 bytes.
+Changes validated: GPIO5 RTC shutdown hold and wake release, SD shutdown before clock removal.
+No hardware was flashed. Sleep current, repeated wake/playback and charging require bench verification.
+Official RTC API reference: https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/gpio.html

@@ -1,0 +1,10 @@
+{
+  "board_sha256": "ccacc02e2b2d3712b67a74642d75926f3c7b05e21c09729e8ec59687a4304513",
+  "pth_pads_missing_mask_openings": [],
+  "mask_files_without_apertures": [],
+  "fabrication_zip_matches_exports": true,
+  "drc_violations": 0,
+  "unconnected_items": 0,
+  "schematic_parity_counts": {},
+  "scope": "Automated fabrication audit only; electrical ratings and physical fit require separate review."
+}

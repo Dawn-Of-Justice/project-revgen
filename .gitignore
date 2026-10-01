@@ -23,4 +23,26 @@ recordings/
 reply.wav
 firmware/**/build/
 
-pcb/
+# --- pcb/ ---------------------------------------------------------------
+# Tracked, except editor/tool state. NOTE: pcb/remote/.history is a nested git
+# repo (Trace / VS Code local-history autosave). It must stay ignored -- git
+# will not recurse into a directory containing .git, so `git add pcb/` would
+# instead record it as a gitlink (mode 160000): a phantom submodule with no
+# .gitmodules entry, leaving every clone with an empty directory.
+pcb/remote/.history/
+
+# tool state
+.mcp-backups/
+.trace/
+
+# KiCad per-user GUI state and autosaves -- churn, not design
+*.kicad_prl
+fp-info-cache
+*-backups/
+_autosave-*
+*.kicad_pcb-bak
+*.kicad_sch-bak
+
+# Trace editor transients (the .trace_sch/.trace_pcb sources themselves are kept)
+*.trace_sch.backup
+*.trace_sch.cache

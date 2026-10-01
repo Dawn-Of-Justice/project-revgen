@@ -9,3 +9,15 @@
 *.wav binary
 *.mp3 binary
 *.m4a binary
+
+# --- pcb/ : preserve bytes exactly -------------------------------------------
+# KiCad and the fab exports are CRLF on disk, and release-hashes.json /
+# package_a3.py record sha256 of those exact bytes. The eol=lf rule above would
+# rewrite them on checkout and silently invalidate every recorded hash, so the
+# whole tree opts out of normalisation. `-text` (not `binary`) keeps diffs
+# readable -- schematic and layout changes still review as text.
+pcb/** -text
+
+# ...except things with no useful textual diff.
+*.zip binary
+*.ses binary
