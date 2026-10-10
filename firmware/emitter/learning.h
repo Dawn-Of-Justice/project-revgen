@@ -1,6 +1,8 @@
 #pragma once
 #include <WebServer.h>
 #include <Preferences.h>
+#include <LittleFS.h>
+#include <esp_partition.h>
 #include <ESPmDNS.h>
 #include "learning_page.h"
 
@@ -30,8 +32,31 @@ static String randomId() {
     (unsigned long)esp_random(), (unsigned long)esp_random()); return String(id);
 }
 static String recordKey(size_t i) { return "r" + String(i); }
+// Only initialize a completely erased partition. Never format existing data on a mount error.
+static bool mountLearnFiles() {
+  if(LittleFS.begin(false))return true;
+  const esp_partition_t *part=esp_partition_find_first(ESP_PARTITION_TYPE_DATA,ESP_PARTITION_SUBTYPE_DATA_SPIFFS,"spiffs");
+  if(!part)return false;
+  uint8_t bytes[256];
+  for(size_t offset=0;offset<part->size;offset+=sizeof(bytes)) {
+    if(esp_partition_read(part,offset,bytes,sizeof(bytes))!=ESP_OK)return false;
+    for(uint8_t byte:bytes)if(byte!=0xff)return false;
+  }
+  return LittleFS.format() && LittleFS.begin(false);
+}
+static String recordPath(size_t i) {return "/learn-"+String(i)+".json";}
+static bool writeRecordFile(size_t i,const String &value) {
+  String path=recordPath(i),temp=path+".tmp";
+  File file=LittleFS.open(temp,"w");if(!file)return false;
+  size_t written=file.print(value);file.flush();file.close();
+  if(written!=value.length())return false;
+  file=LittleFS.open(temp,"r");if(!file)return false;
+  String verified=file.readString();file.close();
+  if(verified!=value)return false;
+  return LittleFS.rename(temp,path);
+}
 static bool storeRecord(size_t i, const String &value) {
-  if (!learnStorage || learnPrefs.putString(recordKey(i).c_str(), value) != value.length()) return false;
+  if (!learnStorage || !writeRecordFile(i,value)) return false;
   learnRecords[i] = value; return true;
 }
 static void learnReply(int status, const String &message, bool error = false) {
@@ -140,7 +165,31 @@ static void learningSetup() {
     learnProducer=learnPrefs.getString("producer","");
     if(!learnProducer.length()){learnProducer=randomId();learnStorage=learnPrefs.putString("producer",learnProducer)==learnProducer.length();}
     learnSequence=learnPrefs.getUInt("seq",0);
-    for(size_t i=0;i<LEARN_SLOTS;i++)learnRecords[i]=learnPrefs.getString(recordKey(i).c_str(),"");
+    // Resume migration safely after power loss; existing files take precedence.
+    bool filesReady=mountLearnFiles(),migrated=filesReady;
+    for(size_t i=0;i<LEARN_SLOTS;i++) {
+      String legacy=learnPrefs.getString(recordKey(i).c_str(),"");
+      learnRecords[i]=legacy;
+      if(filesReady && LittleFS.exists(recordPath(i))) {
+        File file=LittleFS.open(recordPath(i),"r");
+        String saved=file?file.readString():String();file.close();
+        JsonDocument doc;
+        if(!saved.length() || deserializeJson(doc,saved) || !doc["entry"].is<JsonObject>()) {
+          migrated=false;continue;
+        }
+        learnRecords[i]=saved;
+      } else if(filesReady && legacy.length() && !writeRecordFile(i,legacy)) migrated=false;
+    }
+    if(migrated) {
+      // All records are verified in the filesystem before releasing NVS space.
+      for(size_t i=0;i<LEARN_SLOTS;i++) {
+        String key=recordKey(i);
+        if(learnPrefs.isKey(key.c_str()) && !learnPrefs.remove(key.c_str()))migrated=false;
+      }
+    }
+    learnStorage=learnStorage && migrated;
+    Serial.printf("Learning storage: %s, NVS free entries=%u\n",learnStorage?"filesystem ready":"unavailable; records preserved",(unsigned)learnPrefs.freeEntries());
+    if(!learnStorage)learnMessage="Learning storage unavailable. Existing records preserved; saving disabled.";
   }
   if(MDNS.begin("revgen-emitter"))MDNS.addService("http","tcp",80);
   const char *headers[]={"X-Learn-Token"};learnWeb.collectHeaders(headers,1);

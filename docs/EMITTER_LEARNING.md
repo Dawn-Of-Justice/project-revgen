@@ -112,3 +112,14 @@ backend and flash the updated emitter together before expecting learned raw
 commands to sync. Flash storage can hold fewer long captures; full storage is
 reported rather than acknowledged as saved. The separate receive-only scanner
 is in firmware/ir_protocol_scan. Physical replay still needs bench validation.
+
+## Learning storage
+
+Learned records use the existing filesystem partition instead of the small NVS
+settings partition. Writes use a verified temporary file and atomic rename.
+On upgrade, legacy NVS records are copied and verified before their old keys
+are removed; producer identity, sequence and Wi-Fi settings remain in NVS.
+Migration resumes after interruption. A failed mount never auto-formats existing
+data: initialization is allowed only when the entire filesystem partition is erased.
+Storage failure disables saving while preserving records. Upload acknowledgements
+no longer require rewriting large waveforms in NVS.
