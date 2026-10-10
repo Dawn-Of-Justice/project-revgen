@@ -43,6 +43,8 @@ def describe(step: dict) -> str:
                 f"cmd=0x{step['command']:02X}")
     if step.get("protocol") == "nec_raw":
         return f"        IR  nec_raw    0x{step['raw']:08X}"
+    if step.get("protocol") == "raw_timings":
+        return f"        IR raw timings: {len(step['timings'])} at {step['carrier_khz']} kHz"
     return f"        ?? {step}"
 
 
@@ -78,7 +80,7 @@ def on_message(client, _u, msg):
         client.publish(settings.topic_ack, json.dumps({"id": plan_id, "ok": False, "error": "no steps"}))
         return
     print(f"[{stamp}] command {plan_id[:8]}  ({len(steps)} steps, "
-          f"{len(msg.payload)}B of a 2048B firmware buffer)")
+          f"{len(msg.payload)}B of a 8192B firmware buffer)")
 
     error = validate(steps)
     if error:

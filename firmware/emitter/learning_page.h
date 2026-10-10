@@ -10,6 +10,7 @@ body{font:17px system-ui;max-width:760px;margin:32px auto;padding:0 20px;color:#
 <label>Action name <input id="name" value="Volume up" maxlength="64"></label>
 <label>Button behavior <select id="behavior"><option value="button">Ordinary button</option><option value="power_toggle">Power toggle (same button turns on and off)</option><option value="power_on">Discrete power ON only</option><option value="power_off">Discrete power OFF only</option></select></label>
 <small>Most power buttons are toggles. Only select discrete ON/OFF if the original remote has separate commands.</small>
+<label>Raw replay carrier (kHz)<input id="carrier" type="number" min="30" max="60" value="38"></label><small>38 kHz is an assumption, not measured. Unknown signals use raw replay. AC captures restore a complete state; name them e.g. Cool 26 C. Capture limit: 511 timings / 500 ms, 50 ms frame gap.</small>
 <button id="capture">Start capture / retry</button><button id="test" disabled>Test captured signal</button><button id="save" disabled>Save and upload</button>
 <p id="message" aria-live="polite">Start capture, then press and release the original remote button twice.</p><pre id="code"></pre></section>
 <section><h2>Channel names</h2><p>First learn digits 0–9 for device stb. Then assign a channel name to its number.</p><label>Channel ID <input id="channel_id" placeholder="asianet_hd" maxlength="32"></label><label>Channel name <input id="channel_name" placeholder="Asianet HD" maxlength="64"></label><label>Channel number <input id="channel_number" inputmode="numeric" maxlength="6" placeholder="804"></label><button id="channel">Save channel</button></section>
@@ -19,7 +20,7 @@ const token='__SESSION__', $=id=>document.getElementById(id);let captureVersion=
 async function api(path,data){const r=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-Learn-Token':token},body:JSON.stringify(data||{})});const b=await r.json();if(!r.ok)throw Error(b.error||'Request failed');return b;}
 function fields(){return Object.fromEntries(['device','device_name','action','name','behavior'].map(k=>[k,$(k).value.trim()]));}
 async function act(path,data){try{const r=await api(path,data);$('message').textContent=r.message||'Done';return r;}catch(e){$('message').textContent=e.message;}}
-$('capture').onclick=()=>act('capture');$('test').onclick=()=>act('test',{version:captureVersion});
+$('capture').onclick=()=>act('capture',{carrier_khz:Number($('carrier').value)});$('test').onclick=()=>act('test',{version:captureVersion});
 $('save').onclick=()=>{if(confirm('Save this command? This replaces the same device/action ID if it already exists. Check any duplicate warning first.'))act('save',{...fields(),version:captureVersion});};
 $('channel').onclick=()=>act('channel',{device:'stb',device_name:'Set-top box',action:$('channel_id').value.trim(),name:$('channel_name').value.trim(),channel_number:$('channel_number').value.trim(),behavior:'button'});
 $('retry').onclick=()=>act('retry');$('exit').onclick=async()=>{if(await act('exit')){clearInterval(timer);$('message').textContent='Learning mode closed. Hold the button for 5 seconds to reopen.';}};

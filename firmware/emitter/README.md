@@ -168,7 +168,7 @@ Topics worth watching: `revgen/emitter/ack` for acknowledgements,
 
 ## Two things worth knowing
 
-**`setBufferSize(2048)`.** PubSubClient defaults to 256 bytes and *silently
+**`setBufferSize(8192)`.** PubSubClient defaults to 256 bytes and *silently
 drops* anything larger. Channel digits and multi-step volume exceed that. This
 is the most common way the integration appears to work and doesn't — the
 backend publishes happily, the emitter simply never sees the message.

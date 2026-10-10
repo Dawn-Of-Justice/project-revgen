@@ -5,7 +5,8 @@ from .schemas import Plan
 
 MAX_STEPS = 24
 MAX_REPEAT = 10
-MAX_PACKET_BYTES = 2048
+MAX_PACKET_BYTES = 8192
+MAX_RAW_TIMINGS = 512
 
 
 def integer(value, maximum: int) -> bool:
@@ -19,6 +20,7 @@ def validate_steps(steps) -> str | None:
         return "empty sequence"
     if len(steps) > MAX_STEPS:
         return "too many steps"
+    raw_count = 0
     for step in steps:
         if not isinstance(step, dict):
             return "invalid step"
@@ -34,6 +36,18 @@ def validate_steps(steps) -> str | None:
             elif step.get("protocol") == "nec_raw":
                 if not integer(step.get("raw"), 0xFFFFFFFF):
                     return "invalid raw"
+            elif step.get("protocol") == "raw_timings":
+                timings = step.get("timings")
+                if (not isinstance(timings, list) or not 3 <= len(timings) <= MAX_RAW_TIMINGS
+                        or len(timings) % 2 != 1
+                        or any(not integer(t, 65000) or t < 100 for t in timings)
+                        or sum(timings) > 500000
+                        or not integer(step.get("carrier_khz"), 60)
+                        or step["carrier_khz"] < 30 or step.get("repeat", 0) != 0):
+                    return "invalid raw timings"
+                raw_count += len(timings)
+                if raw_count > MAX_RAW_TIMINGS:
+                    return "too many raw timings"
             else:
                 return "unsupported protocol"
         else:

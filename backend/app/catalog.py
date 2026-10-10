@@ -57,6 +57,8 @@ class Catalog:
             entry = discrete
 
         protocol = entry.get("protocol", dev["protocol"])
+        if protocol == "raw_timings":
+            return IRStep(protocol=protocol, timings=entry["timings"], carrier_khz=entry["carrier_khz"])
         if protocol == "nec_raw":
             return IRStep(protocol="nec_raw", raw=int(entry["raw"], 16))
         return IRStep(

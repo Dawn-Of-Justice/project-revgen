@@ -7,7 +7,7 @@ from paho.mqtt import client as mqtt
 
 from app.config import settings
 from app.emitter import Emitter, EmitterOffline, EmitterTimeout
-from app.emitter_protocol import encode_command, validate_steps
+from app.emitter_protocol import MAX_PACKET_BYTES, encode_command, validate_steps
 from app.schemas import IRStep, Plan
 
 
@@ -82,7 +82,7 @@ def test_invalid_numeric_and_step_types(step):
 
 def test_buffer_includes_mqtt_topic_and_header():
     with pytest.raises(ValueError, match="buffer"):
-        encode_command(plan(), "x" * 2040)
+        encode_command(plan(), "x" * (MAX_PACKET_BYTES - 8))
 
 
 def test_oversized_id_is_rejected():

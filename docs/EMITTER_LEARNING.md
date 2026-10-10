@@ -87,3 +87,27 @@ checks remain pending. Do not erase NVS during routine updates.
 Local verification: backend regression suite, mocked browser UI tests and a
 classic ESP32 compilation. Browser mocks test interface behavior, not electrical
 capture or live MQTT permissions.
+
+
+## Bounded raw replay
+
+Learning now retains NEC/Panasonic TV decoding and falls back to raw pulse
+lengths for other captures. Two matching presses are required (raw tolerance:
+20% or 100 us, whichever is greater). Use the same AC state for both presses;
+temperature-up twice usually sends different states. Name AC captures as complete
+presets, e.g. Cool 26 C, rather than relative temperature commands.
+
+Limits: 511 alternating mark/space timings per capture, each 100–65000 us,
+500 ms total, 50 ms end-of-frame gap. Longer or overflowed captures are refused.
+Raw replay frequency is configurable from 30–60 kHz, default 38 kHz; the receiver
+cannot measure carrier frequency. Unknown/noisy signals can still match: always
+use Test to verify the actual appliance before saving. No universal-protocol or
+arbitrary-board compatibility is claimed. Existing classic ESP32/C3 pin profiles
+remain unchanged; alternate boards require verified pin assignments.
+
+MQTT buffer is now 8192 bytes; learning payload ceiling is 7000 bytes. Commands
+share a 512-timing aggregate budget. Raw repeats are disabled. Deploy the updated
+backend and flash the updated emitter together before expecting learned raw
+commands to sync. Flash storage can hold fewer long captures; full storage is
+reported rather than acknowledged as saved. The separate receive-only scanner
+is in firmware/ir_protocol_scan. Physical replay still needs bench validation.

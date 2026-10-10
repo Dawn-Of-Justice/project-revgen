@@ -42,7 +42,7 @@ class LearningUpdate(BaseModel):
                 raise ValueError(error)
             if self.code.get("type") != "ir" or self.code.get("repeat", 0) != 0:
                 raise ValueError("learn one IR command without repeats")
-            fields = {"type", "protocol", "repeat"} | ({"raw"} if self.code["protocol"] == "nec_raw" else {"address", "command"})
+            fields = {"type", "protocol", "repeat"} | ({"timings", "carrier_khz"} if self.code["protocol"] == "raw_timings" else {"raw"} if self.code["protocol"] == "nec_raw" else {"address", "command"})
             if set(self.code) - fields:
                 raise ValueError("unexpected IR fields")
         elif self.code is not None or self.channel_number is None or self.device != "stb":
@@ -61,8 +61,8 @@ class LearningStore:
             self.data = raw
 
     def accept(self, payload: bytes) -> dict:
-        if len(payload) > 1536:
-            raise ValueError("mapping exceeds 1536 bytes")
+        if len(payload) > 7000:
+            raise ValueError("mapping exceeds 7000 bytes")
         update = LearningUpdate.model_validate_json(payload)
         if update.id in self.data["receipts"]:
             return self.data["receipts"][update.id]

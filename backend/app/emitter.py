@@ -103,7 +103,7 @@ class Emitter:
 
     def _on_message(self, _client, _userdata, msg) -> None:
         if msg.topic == settings.topic_learn:
-            if not msg.retain and len(msg.payload) <= 1536:
+            if not msg.retain and len(msg.payload) <= 7000:
                 self._dispatch(self._accept_learning, bytes(msg.payload))
             return
         if msg.topic == settings.topic_status:

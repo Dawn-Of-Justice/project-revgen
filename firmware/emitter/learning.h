@@ -21,6 +21,7 @@ static bool learningActive = false, learnArmed = false, learnReady = false;
 static bool learnStorage = false, learnHaveFirst = false;
 static String learnSession, learnProducer, learnMessage = "Ready", firstCode, capturedCode;
 static uint32_t learnTouched = 0, learnStarted = 0, learnSequence = 0, learnVersion = 0;
+static uint8_t captureCarrier = 38;
 static uint32_t lastIrSeen = 0, lastUpload = 0, captureStarted = 0;
 
 static String randomId() {
@@ -162,14 +163,24 @@ static void learningSetup() {
     String response;serializeJson(d,response);learnWeb.send(200,"application/json",response);
   });
   learnWeb.on("/api/capture",HTTP_POST,[]{JsonDocument d;if(!requestBody(d))return;
-    learnArmed=true;learnReady=learnHaveFirst=false;capturedCode="";learnVersion++;captureStarted=millis();lastIrSeen=millis();
+    if (!d["carrier_khz"].isUnbound() && (!d["carrier_khz"].is<uint32_t>() ||
+        d["carrier_khz"].as<uint32_t>()<30 || d["carrier_khz"].as<uint32_t>()>60)) {
+      learnReply(400,"Carrier must be 30-60 kHz",true);return;
+    }
+    captureCarrier=d["carrier_khz"]|38;
+    Serial.println("capture started");learnArmed=true;learnReady=learnHaveFirst=false;capturedCode="";learnVersion++;captureStarted=millis();lastIrSeen=millis();
     learnMessage="Press and release the original remote button once.";learnReply(200,learnMessage);
   });
   learnWeb.on("/api/test",HTTP_POST,[]{JsonDocument d;if(!requestBody(d))return;
     if(!learnReady || d["version"].as<uint32_t>()!=learnVersion){learnReply(409,"Capture twice first",true);return;}
     JsonDocument code;deserializeJson(code,capturedCode);IrReceiver.stop();
     if(code["protocol"]=="panasonic")IrSender.sendPanasonic(code["address"].as<uint16_t>(),code["command"].as<uint8_t>(),0);
-    else IrSender.sendNECRaw(code["raw"].as<uint32_t>(),0);
+    else if(code["protocol"]=="nec_raw") IrSender.sendNECRaw(code["raw"].as<uint32_t>(),0);
+    else {
+      uint16_t timings[512]; size_t n=0;
+      for(JsonVariant t:code["timings"].as<JsonArray>()) timings[n++]=t.as<uint16_t>();
+      IrSender.sendRaw(timings,n,code["carrier_khz"].as<uint8_t>());
+    }
     delay(100);IrReceiver.start();IrReceiver.resume();lastIrSeen=millis();
     learnMessage="Test sent. Confirm the appliance responded; reception alone cannot prove that.";learnReply(200,learnMessage);
   });
@@ -184,6 +195,19 @@ static void learningSetup() {
   learnWeb.on("/api/exit",HTTP_POST,[]{JsonDocument d;if(!requestBody(d))return;learnReply(200,"Learning mode closed");leaveLearning();});
 }
 
+// Compare timing captures with bounded receiver jitter; retain the first waveform.
+static bool sameCapture(const String &a,const String &b) {
+  JsonDocument x,y;deserializeJson(x,a);deserializeJson(y,b);
+  if(x["protocol"]!="raw_timings" || y["protocol"]!="raw_timings")return a==b;
+  if(x["carrier_khz"]!=y["carrier_khz"])return false;
+  JsonArray p=x["timings"],q=y["timings"];
+  if(p.size()!=q.size())return false;
+  for(size_t i=0;i<p.size();i++) {
+    int u=p[i],v=q[i];if(abs(u-v)>max(100,u/5))return false;
+  }
+  return true;
+}
+
 static void learningLoop() {
   static bool rawLast=false,stable=false,held=false;static uint32_t changed=0,pressed=0;
   bool raw=digitalRead(LEARN_BUTTON_PIN)==LOW;uint32_t now=millis();
@@ -193,11 +217,16 @@ static void learningLoop() {
     held=true;if(learningActive)leaveLearning();else enterLearning();
   }
   if(learningActive) {
-    learnWeb.handleClient();led((now/180)%2);
+    learnWeb.handleClient();
+    now=millis(); // HTTP handlers may update learnTouched; refresh before elapsed-time checks.
+    led((now/180)%2);
     if(now-learnTouched>300000UL||now-learnStarted>1800000UL){leaveLearning();return;}
     if(learnArmed&&now-captureStarted>60000){learnArmed=false;learnMessage="Capture timed out. Start capture again.";}
     if(IrReceiver.decode()) {
-      auto data=IrReceiver.decodedIRData;uint32_t quiet=now-lastIrSeen;lastIrSeen=now;IrReceiver.resume();
+      if(IrReceiver.decodedIRData.flags&IRDATA_FLAGS_WAS_OVERFLOW) {
+        learnHaveFirst=false;learnMessage="Capture overflow: signal too long; nothing saved.";
+      }
+      auto data=IrReceiver.decodedIRData;Serial.printf("IR received protocol=%u bits=%u flags=%u\n",(unsigned)data.protocol,(unsigned)data.numberOfBits,(unsigned)data.flags);uint32_t quiet=now-lastIrSeen;lastIrSeen=now;
       if(learnArmed&&!(data.flags&(IRDATA_FLAGS_IS_REPEAT|IRDATA_FLAGS_WAS_OVERFLOW|IRDATA_FLAGS_PARITY_FAILED))&&quiet>=250) {
         JsonDocument code;code["type"]="ir";code["repeat"]=0;
         bool supported=true;
@@ -205,14 +234,25 @@ static void learningLoop() {
           code["protocol"]="panasonic";code["address"]=data.address;code["command"]=data.command;
         }else if((data.protocol==NEC||data.protocol==NEC2)&&data.numberOfBits==32) {
           code["protocol"]="nec_raw";code["raw"]=(uint32_t)data.decodedRawData;
-        }else supported=false;
-        if(!supported){learnMessage="Unsupported or incomplete protocol. This version learns NEC and Panasonic only (not AC state frames).";learnHaveFirst=false;}
+        }else {
+          code["protocol"]="raw_timings";code["carrier_khz"]=captureCarrier;
+          JsonArray timings=code["timings"].to<JsonArray>();uint32_t duration=0;
+          if(data.rawlen<4 || data.rawlen>513 || (data.rawlen-1)%2!=1) supported=false;
+          for(size_t i=1;supported && i<data.rawlen;i++) {
+            int32_t us=(uint32_t)data.rawDataPtr->rawbuf[i]*MICROS_PER_TICK;
+            us+=(i%2)?-MARK_EXCESS_MICROS:MARK_EXCESS_MICROS;
+            if(us<100 || us>65000){supported=false;break;}
+            duration+=us;timings.add(us);
+          }
+          if(duration>500000)supported=false;
+        }
+        if(!supported){learnMessage="Capture exceeds limits or is incomplete. Try a brief press; max 511 timings / 500 ms.";learnHaveFirst=false;}
         else {
           String fresh;serializeJson(code,fresh);
           if(!learnHaveFirst){firstCode=fresh;learnHaveFirst=true;learnMessage="First press captured. Release, wait a moment, then press the SAME button again.";}
-          else if(firstCode!=fresh){learnHaveFirst=false;learnMessage="Signals differed. Start again with two separate presses of the same button.";}
+          else if(!sameCapture(firstCode,fresh)){learnHaveFirst=false;learnMessage="Signals differed. Start again with two separate presses of the same button.";}
           else {
-            capturedCode=fresh;learnArmed=false;learnReady=true;learnTouched=now;learnVersion++;
+            capturedCode=firstCode;learnArmed=false;learnReady=true;learnTouched=now;learnVersion++;
             learnMessage="Two matching presses captured. Test, name and save.";
             for(const String &s:learnRecords)if(s.length()) {
               JsonDocument old;deserializeJson(old,s);String other;serializeJson(old["entry"]["code"],other);
@@ -221,6 +261,7 @@ static void learningLoop() {
           }
         }
       }
+      IrReceiver.resume();
     }
   }
   // One durable outbox record at a time, oldest first; updates cannot overtake each other.
@@ -233,6 +274,6 @@ static void learningLoop() {
     }
   }
   if(slot>=0){JsonDocument r;deserializeJson(r,learnRecords[slot]);String payload;serializeJson(r["entry"],payload);
-    if(payload.length()<=1536)mqtt.publish(TOPIC_LEARN,payload.c_str(),false);lastUpload=now;
+    if(payload.length()<=7000)mqtt.publish(TOPIC_LEARN,payload.c_str(),false);lastUpload=now;
   }
 }

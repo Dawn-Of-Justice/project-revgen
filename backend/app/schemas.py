@@ -60,10 +60,12 @@ class Intent(BaseModel):
 
 class IRStep(BaseModel):
     type: Literal["ir"] = "ir"
-    protocol: Literal["panasonic", "nec_raw"]
+    protocol: Literal["panasonic", "nec_raw", "raw_timings"]
     address: Optional[int] = None
     command: Optional[int] = None
     raw: Optional[int] = None
+    timings: Optional[list[int]] = None
+    carrier_khz: Optional[int] = None
     repeat: int = 0
 
 

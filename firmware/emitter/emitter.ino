@@ -42,6 +42,8 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <WiFiManager.h>
+#define RAW_BUFFER_LENGTH 514
+#define RECORD_GAP_MICROS 50000
 #include <IRremote.hpp>
 
 // ---------------------------------------------------------------- config
@@ -99,6 +101,9 @@ PubSubClient     mqtt;
 struct Step {
   bool     isDelay;
   uint32_t delayMs;
+  bool     isRaw;
+  uint16_t rawOffset, rawLength;
+  uint8_t carrierKHz;
   bool     isPanasonic;   // false -> NEC raw
   uint16_t address;
   uint8_t  command;
@@ -106,6 +111,8 @@ struct Step {
   uint8_t  repeat;
 };
 
+static uint16_t rawTimings[512];
+static size_t rawUsed = 0;
 static Step   pending[MAX_STEPS];
 static size_t pendingCount = 0;
 static char   pendingId[48] = {0};
@@ -153,6 +160,7 @@ static void publishAck(const char *id, bool ok, const char *error) {
 // in a state nobody asked for and she has no way to undo it.
 static bool parseSteps(JsonArray steps, const char **errorOut) {
   pendingCount = 0;
+  rawUsed = 0;
 
   for (JsonVariant value : steps) {
     if (!value.is<JsonObject>()) { *errorOut = "invalid step"; return false; }
@@ -177,6 +185,7 @@ static bool parseSteps(JsonArray steps, const char **errorOut) {
 
     const char *protocol = step["protocol"] | "";
     s.isDelay = false;
+    s.isRaw = false;
     if (!step["repeat"].isUnbound() &&
         (!step["repeat"].is<uint32_t>() || step["repeat"].as<uint32_t>() > MAX_REPEAT)) {
       *errorOut = "invalid repeat"; return false;
@@ -196,6 +205,22 @@ static bool parseSteps(JsonArray steps, const char **errorOut) {
       if (!step["raw"].is<uint32_t>()) { *errorOut = "invalid raw"; return false; }
       s.isPanasonic = false;
       s.raw = step["raw"].as<uint32_t>();
+    } else if (strcmp(protocol, "raw_timings") == 0) {
+      JsonArray timings = step["timings"].as<JsonArray>();
+      if (timings.isNull() || timings.size()<3 || timings.size()%2!=1 ||
+          timings.size()+rawUsed>512 || s.repeat!=0 ||
+          !step["carrier_khz"].is<uint32_t>() || step["carrier_khz"].as<uint32_t>()<30 ||
+          step["carrier_khz"].as<uint32_t>()>60) { *errorOut="invalid raw timings"; return false; }
+      uint32_t duration=0;
+      s.isRaw=true; s.rawOffset=rawUsed; s.rawLength=timings.size();
+      s.carrierKHz=step["carrier_khz"].as<uint8_t>();
+      for(JsonVariant t:timings) {
+        if(!t.is<uint32_t>() || t.as<uint32_t>()<100 || t.as<uint32_t>()>65000) {
+          *errorOut="invalid raw timings";return false;
+        }
+        duration+=t.as<uint32_t>();rawTimings[rawUsed++]=t.as<uint16_t>();
+      }
+      if(duration>500000){*errorOut="invalid raw timings";return false;}
     } else {
       // Refuse rather than guess. The wrong protocol at her television is
       // worse than doing nothing at all.
@@ -228,7 +253,9 @@ static void executePending() {
       continue;
     }
 
-    if (s.isPanasonic) {
+    if (s.isRaw) {
+      IrSender.sendRaw(rawTimings+s.rawOffset,s.rawLength,s.carrierKHz);
+    } else if (s.isPanasonic) {
       IrSender.sendPanasonic(s.address, s.command, s.repeat);
       Serial.printf("  panasonic addr=0x%X cmd=0x%X\n", s.address, s.command);
     } else {
@@ -376,7 +403,7 @@ void setup() {
   // PubSubClient defaults to a 256-byte buffer and SILENTLY DROPS anything
   // larger. Channel digits and multi-step volume exceed that easily. This one
   // line is the most common way this integration appears to work and does not.
-  if (!mqtt.setBufferSize(2048)) {
+  if (!mqtt.setBufferSize(8192)) {
     Serial.println("MQTT buffer allocation failed");
     ESP.restart();
   }
