@@ -7,14 +7,15 @@ const fs = require('fs'), path = require('path'), assert = require('assert');
  const browser=await chromium.launch({channel:'msedge',headless:true});
  try {
   const page=await browser.newPage({viewport:{width:800,height:900}});
-  let ready=false; const requests=[];
+  let ready=false,tested=false; const requests=[];
   await page.route('http://revgen-emitter.local/**',async route=>{
    const request=route.request(), url=new URL(request.url());
    if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:pageSource});
    assert.equal(request.headers()['x-learn-token'],'test-session-token');
-   if(url.pathname==='/api/status')return route.fulfill({contentType:'application/json',body:JSON.stringify({ready,version:7,message:ready?'Two matches':'Waiting',code:ready?{protocol:'nec_raw',raw:123}:null,entries:[{device_name:'<img src=x onerror=alert(1)>',name:'Volume up',synced:true}]})});
+   if(url.pathname==='/api/status')return route.fulfill({contentType:'application/json',body:JSON.stringify({ready,tested,version:7,message:ready?'Captured':'Waiting',code:ready?{protocol:'nec_raw',raw:123}:null,entries:[{device_name:'<img src=x onerror=alert(1)>',name:'Volume up',synced:true}]})});
    requests.push([url.pathname,request.postDataJSON()]);
-   if(url.pathname==='/api/capture')ready=true;
+   if(url.pathname==='/api/capture'){ready=true;tested=false;}
+   if(url.pathname==='/api/test')tested=true;
    return route.fulfill({contentType:'application/json',body:'{"message":"Saved locally"}'});
   });
   let alerts=0;
@@ -26,19 +27,23 @@ const fs = require('fs'), path = require('path'), assert = require('assert');
   assert.equal(await page.locator('#entries img').count(),0);
   await page.locator('#carrier').fill('40');
   await page.locator('#capture').click();
-  await page.waitForFunction(()=>!document.querySelector('#save').disabled);
+  await page.waitForFunction(()=>!document.querySelector('#test').disabled);
+  assert(await page.locator('#save').isDisabled());
   await page.locator('#test').click();
+  await page.waitForFunction(()=>!document.querySelector('#save').disabled);
   await page.locator('#save').click();
   await page.waitForFunction(()=>document.querySelector('#message').textContent==='Saved locally');
   await page.locator('#channel_id').fill('news_hd');await page.locator('#channel_name').fill('News HD');await page.locator('#channel_number').fill('101');await page.locator('#channel').click();
   await page.waitForTimeout(100);
-  assert(requests.some(([p,d])=>p==='/api/save'&&d.device==='tv'&&d.action==='volume_up'&&d.version===7));
+  assert(requests.some(([p,d])=>p==='/api/save'&&d.device==='tv'&&d.action==='volume_up'&&d.version===7&&d.confirmed===true));
   assert(requests.some(([p,d])=>p==='/api/test'&&d.version===7));
   assert(requests.some(([p,d])=>p==='/api/channel'&&d.device==='stb'&&d.channel_number==='101'));
   assert(requests.some(([p,d])=>p==='/api/capture'&&d.carrier_khz===40));
   assert.equal(alerts,0);
   fs.mkdirSync(path.join(__dirname,'build'),{recursive:true});
   await page.screenshot({path:path.join(__dirname,'build/learning-ui.png'),fullPage:true});
+  await page.locator('#capture').click();
+  await page.waitForFunction(()=>document.querySelector('#save').disabled);
   await page.locator('#exit').click();
   console.log('PASS: session token, capture gating, captured version, save, channel mapping, XSS-safe names, exit.');
  }finally{await browser.close();}

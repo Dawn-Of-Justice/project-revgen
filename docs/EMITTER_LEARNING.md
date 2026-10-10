@@ -20,8 +20,8 @@ supply and ground. The schematic's J1 pins are 1=3V3, 2=GND, 3=OUT.
    launch a browser on another device.
 4. Enter a device ID/name and action ID/name. Use `tv` and `stb` for the primary
    devices, or IDs such as `bedroom_tv` for additional remotes.
-5. Start capture. Press and release the original remote button twice, leaving
-   a short pause between presses. Two matching valid frames are required.
+5. Start capture. Press and release the original remote button once.
+   Test that capture, then confirm the appliance responded before saving.
 6. Test the captured command and observe the appliance. A decoded signal or
    successful transmission alone cannot confirm that the appliance responded.
 7. Save. The page distinguishes locally saved, upload pending, rejected and
@@ -79,7 +79,7 @@ persistent data directory. MQTT ACLs must allow the emitter to publish
 needs the reverse permissions. Both topics are non-retained. Existing command,
 acknowledgement and status permissions are unchanged.
 
-After deployment and flashing, verify two captures, physical test transmission,
+After deployment and flashing, verify single capture, physical test transmission and save confirmation,
 local persistence after reboot, upload acknowledgement, backend persistence
 after restart, and a voice request resolving the newly named action. These live
 checks remain pending. Do not erase NVS during routine updates.
@@ -92,9 +92,10 @@ capture or live MQTT permissions.
 ## Bounded raw replay
 
 Learning now retains NEC/Panasonic TV decoding and falls back to raw pulse
-lengths for other captures. Two matching presses are required (raw tolerance:
-20% or 100 us, whichever is greater). Use the same AC state for both presses;
-temperature-up twice usually sends different states. Name AC captures as complete
+lengths for other captures. One valid capture is retained and reception is disarmed immediately. Saving
+requires testing that capture and explicitly confirming the appliance response.
+A new capture clears test status; stale capture versions cannot be tested or saved.
+Temperature-up presses send different states, so no second matching press is required. Name AC captures as complete
 presets, e.g. Cool 26 C, rather than relative temperature commands.
 
 Limits: 511 alternating mark/space timings per capture, each 100–65000 us,

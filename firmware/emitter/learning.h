@@ -18,8 +18,8 @@ static WebServer learnWeb(80);
 static Preferences learnPrefs;
 static String learnRecords[LEARN_SLOTS];
 static bool learningActive = false, learnArmed = false, learnReady = false;
-static bool learnStorage = false, learnHaveFirst = false;
-static String learnSession, learnProducer, learnMessage = "Ready", firstCode, capturedCode;
+static bool learnStorage = false, learnTested = false;
+static String learnSession, learnProducer, learnMessage = "Ready", capturedCode;
 static uint32_t learnTouched = 0, learnStarted = 0, learnSequence = 0, learnVersion = 0;
 static uint8_t captureCarrier = 38;
 static uint32_t lastIrSeen = 0, lastUpload = 0, captureStarted = 0;
@@ -72,15 +72,15 @@ static void leaveLearning() {
 }
 static void enterLearning() {
   learningActive=true; learnSession=randomId();learnTouched=learnStarted=millis();
-  learnArmed=learnReady=learnHaveFirst=false;capturedCode="";learnVersion++;
-  learnMessage="Start capture, then press and release the remote button twice.";
+  learnArmed=learnReady=learnTested=false;capturedCode="";learnVersion++;
+  learnMessage="Start capture, then press and release the remote button once.";
   IrReceiver.begin(LEARN_RX_PIN, DISABLE_LED_FEEDBACK);learnWeb.begin();
   Serial.printf("Learning page: http://%s/ (or http://revgen-emitter.local/)\n",WiFi.localIP().toString().c_str());
 }
 static void saveMapping(bool channel) {
   JsonDocument req;if(!requestBody(req))return;
-  if(!channel && (!learnReady || req["version"].as<uint32_t>()!=learnVersion)) {
-    learnReply(409,"Capture the same button twice first",true);return;
+  if(!channel && (!learnReady || !learnTested || req["confirmed"]!=true || req["version"].as<uint32_t>()!=learnVersion)) {
+    learnReply(409,"Capture once, test, then confirm the appliance responded",true);return;
   }
   String device=req["device"]|"", name=req["name"]|"", action=req["action"]|"";
   String deviceName=req["device_name"]|"", behavior=req["behavior"]|"button";
@@ -152,7 +152,7 @@ static void learningSetup() {
   });
   learnWeb.on("/api/status",HTTP_GET,[]{
     if(!allowed())return;
-    JsonDocument d;d["message"]=learnMessage;d["ready"]=learnReady;d["version"]=learnVersion;
+    JsonDocument d;d["message"]=learnMessage;d["ready"]=learnReady;d["tested"]=learnTested;d["version"]=learnVersion;
     if(capturedCode.length()){JsonDocument c;deserializeJson(c,capturedCode);d["code"].set(c.as<JsonObject>());}
     JsonArray entries=d["entries"].to<JsonArray>();
     for(const String &s:learnRecords)if(s.length()) {
@@ -168,11 +168,11 @@ static void learningSetup() {
       learnReply(400,"Carrier must be 30-60 kHz",true);return;
     }
     captureCarrier=d["carrier_khz"]|38;
-    Serial.println("capture started");learnArmed=true;learnReady=learnHaveFirst=false;capturedCode="";learnVersion++;captureStarted=millis();lastIrSeen=millis();
+    Serial.println("capture started");learnArmed=true;learnReady=learnTested=false;capturedCode="";learnVersion++;captureStarted=millis();lastIrSeen=millis();
     learnMessage="Press and release the original remote button once.";learnReply(200,learnMessage);
   });
   learnWeb.on("/api/test",HTTP_POST,[]{JsonDocument d;if(!requestBody(d))return;
-    if(!learnReady || d["version"].as<uint32_t>()!=learnVersion){learnReply(409,"Capture twice first",true);return;}
+    if(!learnReady || d["version"].as<uint32_t>()!=learnVersion){learnReply(409,"Capture a signal first",true);return;}
     JsonDocument code;deserializeJson(code,capturedCode);IrReceiver.stop();
     if(code["protocol"]=="panasonic")IrSender.sendPanasonic(code["address"].as<uint16_t>(),code["command"].as<uint8_t>(),0);
     else if(code["protocol"]=="nec_raw") IrSender.sendNECRaw(code["raw"].as<uint32_t>(),0);
@@ -182,7 +182,7 @@ static void learningSetup() {
       IrSender.sendRaw(timings,n,code["carrier_khz"].as<uint8_t>());
     }
     delay(100);IrReceiver.start();IrReceiver.resume();lastIrSeen=millis();
-    learnMessage="Test sent. Confirm the appliance responded; reception alone cannot prove that.";learnReply(200,learnMessage);
+    learnTested=true;learnMessage="Test sent. Confirm the appliance responded; reception alone cannot prove that.";learnReply(200,learnMessage);
   });
   learnWeb.on("/api/save",HTTP_POST,[]{saveMapping(false);});
   learnWeb.on("/api/channel",HTTP_POST,[]{saveMapping(true);});
@@ -193,19 +193,6 @@ static void learningSetup() {
     }lastUpload=0;learnReply(200,"Pending uploads will retry");
   });
   learnWeb.on("/api/exit",HTTP_POST,[]{JsonDocument d;if(!requestBody(d))return;learnReply(200,"Learning mode closed");leaveLearning();});
-}
-
-// Compare timing captures with bounded receiver jitter; retain the first waveform.
-static bool sameCapture(const String &a,const String &b) {
-  JsonDocument x,y;deserializeJson(x,a);deserializeJson(y,b);
-  if(x["protocol"]!="raw_timings" || y["protocol"]!="raw_timings")return a==b;
-  if(x["carrier_khz"]!=y["carrier_khz"])return false;
-  JsonArray p=x["timings"],q=y["timings"];
-  if(p.size()!=q.size())return false;
-  for(size_t i=0;i<p.size();i++) {
-    int u=p[i],v=q[i];if(abs(u-v)>max(100,u/5))return false;
-  }
-  return true;
 }
 
 static void learningLoop() {
@@ -223,8 +210,8 @@ static void learningLoop() {
     if(now-learnTouched>300000UL||now-learnStarted>1800000UL){leaveLearning();return;}
     if(learnArmed&&now-captureStarted>60000){learnArmed=false;learnMessage="Capture timed out. Start capture again.";}
     if(IrReceiver.decode()) {
-      if(IrReceiver.decodedIRData.flags&IRDATA_FLAGS_WAS_OVERFLOW) {
-        learnHaveFirst=false;learnMessage="Capture overflow: signal too long; nothing saved.";
+      if(learnArmed && (IrReceiver.decodedIRData.flags&IRDATA_FLAGS_WAS_OVERFLOW)) {
+        learnTested=false;learnMessage="Capture overflow: signal too long; nothing saved.";
       }
       auto data=IrReceiver.decodedIRData;Serial.printf("IR received protocol=%u bits=%u flags=%u\n",(unsigned)data.protocol,(unsigned)data.numberOfBits,(unsigned)data.flags);uint32_t quiet=now-lastIrSeen;lastIrSeen=now;
       if(learnArmed&&!(data.flags&(IRDATA_FLAGS_IS_REPEAT|IRDATA_FLAGS_WAS_OVERFLOW|IRDATA_FLAGS_PARITY_FAILED))&&quiet>=250) {
@@ -246,14 +233,12 @@ static void learningLoop() {
           }
           if(duration>500000)supported=false;
         }
-        if(!supported){learnMessage="Capture exceeds limits or is incomplete. Try a brief press; max 511 timings / 500 ms.";learnHaveFirst=false;}
+        if(!supported){learnMessage="Capture exceeds limits or is incomplete. Try a brief press; max 511 timings / 500 ms.";learnTested=false;}
         else {
           String fresh;serializeJson(code,fresh);
-          if(!learnHaveFirst){firstCode=fresh;learnHaveFirst=true;learnMessage="First press captured. Release, wait a moment, then press the SAME button again.";}
-          else if(!sameCapture(firstCode,fresh)){learnHaveFirst=false;learnMessage="Signals differed. Start again with two separate presses of the same button.";}
-          else {
-            capturedCode=firstCode;learnArmed=false;learnReady=true;learnTouched=now;learnVersion++;
-            learnMessage="Two matching presses captured. Test, name and save.";
+          {
+            capturedCode=fresh;learnArmed=false;learnReady=true;learnTested=false;learnTouched=now;learnVersion++;
+            learnMessage="Signal captured. Test it, then confirm the appliance responded before saving. AC signals restore the captured settings.";
             for(const String &s:learnRecords)if(s.length()) {
               JsonDocument old;deserializeJson(old,s);String other;serializeJson(old["entry"]["code"],other);
               if(other==fresh){learnMessage="Duplicate signal already saved. Check the assigned action before saving another name.";break;}
